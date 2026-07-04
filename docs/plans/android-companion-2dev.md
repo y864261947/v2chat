@@ -14,6 +14,8 @@
 
 - 后端协议（两条线的握手契约）：[backend-api-spec.md](./backend-api-spec.md) — v0.1 草案，评审后定稿
 - 前端上手与任务拆解：[frontend-dev-guide.md](./frontend-dev-guide.md)
+- **功能详细规格**（访谈全部细节的 UX 级固化）：[companion-feature-spec.md](./companion-feature-spec.md)
+- **实施计划**（代码级步骤，按里程碑逐份产出）：[2026-07-04-m1-debrand-plan.md](./2026-07-04-m1-debrand-plan.md)；M2 各子系统计划在动工前按同格式编写
 - 因后端有专人并行，原"体验优先"串行里程碑调整为**双线并行**：客户端线 M0✅→M1→M2；后端线 B1（auth/卡密/积分/网关）→B2（audio/克隆）；汇合点=原 M3（联调收口、首个对外 APK）。M4 Honcho 不变。
 
 ## 一、已确认决策
