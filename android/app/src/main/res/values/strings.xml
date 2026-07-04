@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">伴侣Dev</string>
+    <string name="title_activity_main">伴侣Dev</string>
+    <string name="package_name">com.danjoy.companion.dev</string>
+    <string name="custom_url_scheme">com.danjoy.companion.dev</string>
+</resources>
