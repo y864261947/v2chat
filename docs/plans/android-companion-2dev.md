@@ -15,7 +15,25 @@
 - 后端协议（两条线的握手契约）：[backend-api-spec.md](./backend-api-spec.md) — v0.1 草案，评审后定稿
 - 前端上手与任务拆解：[frontend-dev-guide.md](./frontend-dev-guide.md)
 - **功能详细规格**（访谈全部细节的 UX 级固化）：[companion-feature-spec.md](./companion-feature-spec.md)
-- **实施计划**（代码级步骤，按里程碑逐份产出）：[2026-07-04-m1-debrand-plan.md](./2026-07-04-m1-debrand-plan.md)；M2 各子系统计划在动工前按同格式编写
+- **实施计划**（代码级步骤，按里程碑逐份产出）：[2026-07-04-m1-debrand-plan.md](./2026-07-04-m1-debrand-plan.md)；后端 B1 计划在 [chatbox-companion-backend](https://github.com/alex-uj/chatbox-companion-backend) 仓库
+
+### 实施计划排程（滚动式：规格稳定、计划就近现写）
+
+| 计划 | 编写触发条件 | 执行者 |
+|---|---|---|
+| M1 品牌剥离 | ✅ 已就绪 | 前端搭档 |
+| B1 auth/卡密/积分/网关 | ✅ 已就绪（后端仓库） | Claude（Alex 验收） |
+| B2 audio（STT/TTS）+ 音色克隆代理 | B1 合并后（后端代码稳定） | Claude（Alex 验收） |
+| M2.1 微信式首页 | M1 合并 + D19 首页结构拍板 | 前端搭档 |
+| M2.2 角色系统扩展 | M2.1 合并 | 前端搭档 |
+| M2.3 语音消息 | M2.2 合并 + 原生麦克风权限桥验证完成（Claude 先行） | 前端搭档 + Claude（原生侧） |
+| M2.4 表情包 | M2.2 合并（与 M2.3 可并行） | 前端搭档 |
+| M2.5 本地记忆 | M2.2 合并 +「跨角色用户档案」[待定] 拍板 | 前端搭档 / Claude |
+| M2.6 登录/卡密/积分 UI | B1 可联调（有测试环境） | 前端搭档 |
+| 汇合收口（原 M3） | M2.x 与 B2 齐活 | 三方 |
+| M4 Honcho 高级记忆 | 汇合后 + Honcho 代理协议详设 | Claude 主导 |
+
+每份计划编写前重新踩点最新代码（行号/结构以当时为准），格式统一 writing-plans（checkbox + 完整代码 + 验证命令）。
 - 因后端有专人并行，原"体验优先"串行里程碑调整为**双线并行**：客户端线 M0✅→M1→M2；后端线 B1（auth/卡密/积分/网关）→B2（audio/克隆）；汇合点=原 M3（联调收口、首个对外 APK）。M4 Honcho 不变。
 
 ## 一、已确认决策
