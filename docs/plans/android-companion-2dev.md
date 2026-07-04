@@ -39,6 +39,8 @@
 | D15 | 测试设备 | 真机 USB 调试 + 模拟器都要（模拟器需先验证本机 KVM） |
 | D16 | 里程碑顺序 | **体验优先**：环境基线 → 品牌剥离 → 伴侣体验（用中转站自测）→ 账号计费 → Honcho 高级记忆 |
 | D17 | 品牌方向 | 目标客户为二次元人群，品牌名走二次元风格（候选拍板中，定名后做同名/商标粗查） |
+| D18 | 后端技术栈 | Node 22 + TypeScript + Hono + Drizzle + SQLite（可迁 Postgres）；仓库 [chatbox-companion-backend](https://github.com/alex-uj/chatbox-companion-backend)（默认端口 8002，对齐客户端 dev:local）。理由：与客户端共享 zod 协议类型、SSE 透传一等公民、单容器部署 |
+| D19 | 首页信息架构 | 决策权移交前端开发者（M2.1 动工前定，Tab vs 侧栏，见 companion-feature-spec §2） |
 
 工程立场（已声明，用户可推翻）：
 
