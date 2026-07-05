@@ -48,7 +48,7 @@
 - **B1 后端**（Alex + AI，计划就绪）：登录/卡密/积分/推理网关
 - 品牌名未定（面向二次元的名字还在想），所以包名用占位 `com.danjoy.companion.dev`，UI 里的 "Chatbox" 文案暂不动——**首个对外发布前**统一替换
 
-**双仓结构**：本仓库=客户端；后端在另一个仓库，你不用 clone 它，对接只看协议文档（§3 表中第 5 项）。
+**双仓结构**：本仓库=客户端；后端在 [chatbox-companion-backend](https://github.com/alex-uj/chatbox-companion-backend)（你也有权限，想看随时看）。日常对接只需要协议文档（§3 表中第 5 项），后端实现细节不影响你。
 
 ## 5. 你的第一周
 
