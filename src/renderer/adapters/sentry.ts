@@ -1,25 +1,17 @@
-import * as Sentry from '@sentry/react'
 import type { SentryAdapter, SentryScope } from '../../shared/utils/sentry_adapter'
 
 /**
- * 渲染进程的 Sentry 适配器实现
+ * 零遥测（决策 D14）：Sentry 适配器 no-op 化。
+ * 保留类名与接口，调用面不动；错误排查依赖本地日志 + 用户反馈。
  */
 export class RendererSentryAdapter implements SentryAdapter {
-  captureException(error: unknown): void {
-    Sentry.captureException(error)
-  }
+  captureException(_error: unknown): void {}
 
   withScope(callback: (scope: SentryScope) => void): void {
-    Sentry.withScope((sentryScope) => {
-      const scope: SentryScope = {
-        setTag(key: string, value: string): void {
-          sentryScope.setTag(key, value)
-        },
-        setExtra(key: string, value: unknown): void {
-          sentryScope.setExtra(key, value)
-        },
-      }
-      callback(scope)
-    })
+    const scope: SentryScope = {
+      setTag(_key: string, _value: string): void {},
+      setExtra(_key: string, _value: unknown): void {},
+    }
+    callback(scope)
   }
 }

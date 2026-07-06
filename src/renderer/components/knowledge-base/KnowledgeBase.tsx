@@ -261,7 +261,7 @@ const KnowledgeBasePage: React.FC = () => {
   function formatParserType(parserType?: DocumentParserType): string {
     switch (parserType) {
       case 'chatbox-ai':
-        return 'Chatbox AI'
+        return 'V2API Cloud'
       case 'mineru':
         return 'MinerU'
       case 'local':
@@ -310,7 +310,7 @@ const KnowledgeBasePage: React.FC = () => {
           setChatboxAIModels(config.knowledge_base_models)
         }
       } catch (error) {
-        toastError(t('Failed to fetch Chatbox AI models config, Error: {{error}}', { error: error }))
+        toastError(t('Failed to fetch cloud knowledge base models config, Error: {{error}}', { error: error }))
       }
     }
     fetchChatboxAIModels()
@@ -545,11 +545,11 @@ const KnowledgeBasePage: React.FC = () => {
               variant="light"
               color="orange"
               icon={<IconAlertTriangle size={16} />}
-              title={t('Sign in to Chatbox AI')}
+              title={t('Configure V2API')}
             >
               <Text size="sm">
                 {t(
-                  'Your Chatbox AI knowledge base requires an active login. Please sign in to Chatbox AI to use this knowledge base.'
+                  'This cloud knowledge base requires V2API configuration. Please configure V2API to use this knowledge base.'
                 )}
               </Text>
               <Group mt="sm">
@@ -557,9 +557,9 @@ const KnowledgeBasePage: React.FC = () => {
                   size="xs"
                   variant="light"
                   leftSection={<IconLogin size={14} />}
-                  onClick={() => navigateToSettings('chatbox-ai')}
+                  onClick={() => navigateToSettings('/v2api')}
                 >
-                  {t('Log in to Chatbox AI')}
+                  {t('Open V2API Settings')}
                 </Button>
               </Group>
             </Alert>
@@ -606,17 +606,17 @@ const KnowledgeBasePage: React.FC = () => {
                             {t('Models')}:
                           </Text>
                           <ModelPill
-                            modelValue={'Chatbox AI'}
-                            formatModelName={() => 'Chatbox AI'}
+                            modelValue={'V2API Cloud'}
+                            formatModelName={() => 'V2API Cloud'}
                             isProviderAvailable={() => canUseChatboxAIProvider}
                             type="embedding"
                             t={t}
                             unavailableTooltip={
                               !isLoggedIn
-                                ? String(t('Sign in to Chatbox AI to use this knowledge base'))
+                                ? String(t('Configure V2API to use this knowledge base'))
                                 : String(t('Provider unavailable'))
                             }
-                            onUnavailableClick={!isLoggedIn ? () => navigateToSettings('chatbox-ai') : undefined}
+                            onUnavailableClick={!isLoggedIn ? () => navigateToSettings('/v2api') : undefined}
                           />
                         </>
                       ) : (

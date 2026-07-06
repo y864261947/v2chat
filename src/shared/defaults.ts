@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid'
 import { type Config, ModelProviderEnum, type SessionSettings, type Settings, Theme } from './types'
+import { V2API_DEFAULT_CHAT_MODEL, V2API_DEFAULT_TTS_MODEL, V2API_DEFAULT_TTS_VOICE } from './v2api'
 
 export function settings(): Settings {
   return {
@@ -66,6 +67,48 @@ export function settings(): Settings {
     // xAIModel: 'grok-beta',
 
     // customProviders: [],
+    providers: {
+      [ModelProviderEnum.V2APIOpenAI]: {
+        apiHost: 'https://v2api.top/v1',
+        models: [
+          {
+            modelId: V2API_DEFAULT_CHAT_MODEL,
+            capabilities: ['vision', 'tool_use'],
+          },
+        ],
+      },
+      [ModelProviderEnum.V2APIClaude]: {
+        apiHost: 'https://v2api.top/v1',
+        models: [
+          {
+            modelId: 'claude-sonnet-4-5',
+            capabilities: ['vision', 'tool_use', 'reasoning'],
+          },
+        ],
+      },
+      [ModelProviderEnum.V2APIGemini]: {
+        apiHost: 'https://v2api.top/v1',
+        models: [
+          {
+            modelId: 'gemini-2.5-flash',
+            capabilities: ['vision', 'tool_use', 'reasoning'],
+          },
+        ],
+      },
+    },
+    v2api: {
+      protocol: 'openai',
+      ttsModel: V2API_DEFAULT_TTS_MODEL,
+      ttsVoice: V2API_DEFAULT_TTS_VOICE,
+    },
+    defaultChatModel: {
+      provider: ModelProviderEnum.V2APIOpenAI,
+      model: V2API_DEFAULT_CHAT_MODEL,
+    },
+    ocrModel: {
+      provider: ModelProviderEnum.V2APIOpenAI,
+      model: V2API_DEFAULT_CHAT_MODEL,
+    },
 
     showWordCount: false,
     showTokenCount: false,
@@ -164,16 +207,16 @@ export function getDefaultPrompt() {
 
 export function chatSessionSettings(): SessionSettings {
   return {
-    provider: ModelProviderEnum.ChatboxAI,
-    modelId: 'chatboxai-4',
+    provider: ModelProviderEnum.V2APIOpenAI,
+    modelId: V2API_DEFAULT_CHAT_MODEL,
     maxContextMessageCount: Number.MAX_SAFE_INTEGER,
   }
 }
 
 export function pictureSessionSettings(): SessionSettings {
   return {
-    provider: ModelProviderEnum.ChatboxAI,
-    modelId: 'DALL-E-3',
+    provider: ModelProviderEnum.V2APIOpenAI,
+    modelId: V2API_DEFAULT_CHAT_MODEL,
     imageGenerateNum: 1,
     dalleStyle: 'vivid',
   }

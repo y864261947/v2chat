@@ -1,4 +1,4 @@
-import { app, type BrowserWindow, Menu, MenuItem, type MenuItemConstructorOptions, shell } from 'electron'
+import { app, type BrowserWindow, Menu, type MenuItemConstructorOptions } from 'electron'
 import Locale from './locales'
 
 interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
@@ -63,17 +63,17 @@ export default class MenuBuilder {
 
   buildDarwinTemplate(): MenuItemConstructorOptions[] {
     const subMenuAbout: DarwinMenuItemConstructorOptions = {
-      label: 'Chatbox',
+      label: 'V2Chat',
       submenu: [
         {
-          label: 'About Chatbox',
+          label: 'About V2Chat',
           selector: 'orderFrontStandardAboutPanel:',
         },
         { type: 'separator' },
         { label: 'Services', submenu: [] },
         { type: 'separator' },
         {
-          label: 'Hide Chatbox',
+          label: 'Hide V2Chat',
           accelerator: 'Command+H',
           selector: 'hide:',
         },
@@ -201,32 +201,7 @@ export default class MenuBuilder {
     }
     const subMenuHelp: MenuItemConstructorOptions = {
       label: 'Help',
-      submenu: [
-        {
-          label: 'Learn More',
-          click() {
-            shell.openExternal('https://chatboxai.app')
-          },
-        },
-        {
-          label: 'Github Repo',
-          click() {
-            shell.openExternal('https://github.com/chatboxai/chatbox')
-          },
-        },
-        // {
-        //   label: 'Community Discussions',
-        //   click() {
-        //     shell.openExternal('https://www.electronjs.org/community');
-        //   },
-        // },
-        {
-          label: 'Search Issues',
-          click() {
-            shell.openExternal('https://github.com/chatboxai/chatbox/issues?q=is%3Aissue')
-          },
-        },
-      ],
+      submenu: [],
     }
 
     const subMenuView =
@@ -292,32 +267,7 @@ export default class MenuBuilder {
       },
       {
         label: 'Help',
-        submenu: [
-          {
-            label: 'Learn More',
-            click() {
-              shell.openExternal('https://chatboxai.app')
-            },
-          },
-          {
-            label: 'Github Repo',
-            click() {
-              shell.openExternal('https://github.com/chatboxai/chatbox')
-            },
-          },
-          // {
-          //   label: 'Community Discussions',
-          //   click() {
-          //     shell.openExternal('https://www.electronjs.org/community');
-          //   },
-          // },
-          {
-            label: 'Search Issues',
-            click() {
-              shell.openExternal('https://github.com/chatboxai/chatbox/issues?q=is%3Aissue')
-            },
-          },
-        ],
+        submenu: [],
       },
     ]
 

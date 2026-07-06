@@ -1,11 +1,3 @@
-declare global {
-  interface Window {
-    plausible?: ((event: string, options?: { props?: Record<string, unknown> }) => void) & { q?: unknown[] }
-  }
-}
-
-export function trackEvent(event: string, props: Record<string, unknown> = {}) {
-  if (window.plausible) {
-    window.plausible(event, { props })
-  }
+export function trackEvent(_event: string, _props: Record<string, unknown> = {}) {
+  // M1 zero-telemetry baseline: event tracking is intentionally disabled.
 }

@@ -1,4 +1,4 @@
-import { type RemoteConfig, Theme } from '@shared/types'
+import { Theme } from '@shared/types'
 import { z } from 'zod'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import Toasts from '@/components/common/Toasts'
@@ -51,7 +51,6 @@ import { JK_EVENTS, JK_PAGE_NAMES } from '@/analytics/jk-events'
 import SettingsModal, { navigateToSettings } from '@/modals/Settings'
 import { prefetchModelRegistry } from '@/packages/model-registry'
 import { getOS } from '@/packages/navigator'
-import * as remote from '@/packages/remote'
 import PictureDialog from '@/pages/PictureDialog'
 import RemoteDialogWindow from '@/pages/RemoteDialogWindow'
 import SearchDialog from '@/pages/SearchDialog'
@@ -61,9 +60,8 @@ import Sidebar from '@/Sidebar'
 import storage from '@/storage'
 import * as atoms from '@/stores/atoms'
 import { getSession, useSession } from '@/stores/chatStore'
-import { initOnboardingStore, onboardingStore } from '@/stores/onboardingStore'
+import { initOnboardingStore } from '@/stores/onboardingStore'
 import * as premiumActions from '@/stores/premiumActions'
-import * as settingActions from '@/stores/settingActions'
 import { initSettingsStore, settingsStore, useLanguage, useSettingsStore, useTheme } from '@/stores/settingsStore'
 import { getTaskSession } from '@/stores/taskSessionStore'
 import { useUIStore } from '@/stores/uiStore'
@@ -155,9 +153,7 @@ function Root() {
       await Promise.all([initSettingsStore(), initOnboardingStore()])
       void prefetchModelRegistry()
 
-      const remoteConfig = await remote
-        .getRemoteConfig('setting_chatboxai_first')
-        .catch(() => ({ setting_chatboxai_first: false }) as RemoteConfig)
+      const remoteConfig = { setting_chatboxai_first: false }
       setRemoteConfig(async (prev) => ({ ...(await prev), ...remoteConfig }))
 
       // Skip guide-related checks if already on guide or settings/mcp page
@@ -179,16 +175,7 @@ function Root() {
 
       initialized.current = true
 
-      // Check if user needs onboarding guide
-      // Conditions: not completed onboarding AND no valid config
-      const onboardingCompleted = onboardingStore.getState().completed
-      const needsSetup = settingActions.needEditSetting()
-
-      // Auto-navigate to guide for new users who need setup
-      if (!isExceeded && !onboardingCompleted && needsSetup) {
-        router.navigate({ to: '/guide', replace: true })
-        return
-      }
+      // M1: official onboarding is disabled; M2.1 will replace it with first-role creation.
 
       // 是否需要弹出关于窗口（更新后首次启动）
       // 目前仅在桌面版本更新后首次启动、且网络环境为"外网"的情况下才自动弹窗
@@ -342,7 +329,6 @@ function Root() {
         </Box>
       </Grid>
       {/* 对话设置 */}
-      {/* <AppStoreRatingDialog /> */}
       {/* 代码预览 */}
       {/* <ArtifactDialog /> */}
       {/* 对话列表清理 */}

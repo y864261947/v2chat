@@ -99,13 +99,11 @@ export class AppUpdater {
 
     this.isChecking = true
     try {
-      const feedUrls = [
-        'https://chatboxai.app/api/auto_upgrade',
-        'https://api.chatboxai.app/api/auto_upgrade',
-        'https://api.ai-chatbox.com/api/auto_upgrade',
-        'https://api.chatboxapp.xyz/api/auto_upgrade',
-        'https://api.chatboxai.com/api/auto_upgrade',
-      ]
+      const feedUrls: string[] = []
+      if (feedUrls.length === 0) {
+        log.info('auto_updater: official update feeds disabled')
+        return null
+      }
 
       const settings = getSettings()
       autoUpdater.channel = settings.betaUpdate ? 'beta' : 'latest'

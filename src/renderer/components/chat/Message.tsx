@@ -30,7 +30,7 @@ import { Gallery, Item as GalleryItem } from 'react-photoswipe-gallery'
 import { trackJkClickEvent } from '@/analytics/jk'
 import { JK_EVENTS, JK_PAGE_NAMES } from '@/analytics/jk-events'
 import Markdown from '@/components/Markdown'
-import { useFetchBlob } from '@/hooks/useBlob'
+import { useBlob, useFetchBlob } from '@/hooks/useBlob'
 import { useIsSmallScreen } from '@/hooks/useScreenChange'
 import { cn } from '@/lib/utils'
 import { navigateToSettings } from '@/modals/Settings'
@@ -503,6 +503,8 @@ const _Message: FC<Props> = (props) => {
                       )}
                     </div>
                   )
+                ) : item.type === 'audio' ? (
+                  <AudioInStorage key={`audio-${item.storageKey}`} storageKey={item.storageKey} mimeType={item.mimeType} />
                 ) : item.type === 'tool-call' ? (
                   <ToolCallPartUI key={item.toolCallId} part={item as MessageToolCallPart} />
                 ) : null
@@ -888,6 +890,21 @@ const ImageInStorageGalleryItem = ({ storageKey, height }: { storageKey: string;
       )}
     </GalleryItem>
   ) : null
+}
+
+const AudioInStorage = ({ storageKey, mimeType }: { storageKey: string; mimeType: string }) => {
+  const { data } = useBlob(storageKey)
+  const src = data?.startsWith('data:') ? data : data ? `data:${mimeType};base64,${data}` : undefined
+
+  if (!src) {
+    return null
+  }
+
+  return (
+    <Flex className="my-2 max-w-full" align="center">
+      <audio controls preload="metadata" src={src} className="max-w-full" />
+    </Flex>
+  )
 }
 
 export const MessageActionIcon = forwardRef<

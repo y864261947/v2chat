@@ -15,6 +15,9 @@ export function getMessageText(message: Message, includeImagePlaceHolder = true,
         if (c.type === 'image') {
           return includeImagePlaceHolder ? '[image]' : null
         }
+        if (c.type === 'audio') {
+          return includeImagePlaceHolder ? '[audio]' : null
+        }
         return ''
       })
       .filter((c) => c !== null)

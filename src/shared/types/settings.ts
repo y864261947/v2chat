@@ -132,6 +132,13 @@ export const ProviderOptionsSchema = z.object({
   google: GoogleParamsSchema.optional(),
 })
 
+export const V2APISettingsSchema = z.object({
+  protocol: z.enum(['openai', 'claude', 'gemini']).default('openai'),
+  defaultVisionModel: z.string().optional().catch(undefined),
+  ttsModel: z.string().default('tts-1'),
+  ttsVoice: z.string().default('alloy'),
+})
+
 // NOTICE: Global settings is for new session default settings, set to session when session created, changes will not affect existing sessions
 export const GlobalSessionSettingsSchema = z.object({
   maxContextMessageCount: z.number().optional().catch(undefined),
@@ -290,6 +297,11 @@ export enum Theme {
 
 export const SettingsSchema = GlobalSessionSettingsSchema.extend({
   providers: z.record(z.string(), ProviderSettingsSchema).optional().catch(undefined),
+  v2api: V2APISettingsSchema.default({
+    protocol: 'openai',
+    ttsModel: 'tts-1',
+    ttsVoice: 'alloy',
+  }),
   customProviders: z.array(CustomProviderBaseInfoSchema).optional().catch(undefined),
   favoritedModels: z
     .array(
@@ -430,6 +442,7 @@ export type ClaudeParams = z.infer<typeof ClaudeParamsSchema>
 export type OpenAIParams = z.infer<typeof OpenAIParamsSchema>
 export type GoogleParams = z.infer<typeof GoogleParamsSchema>
 export type ProviderOptions = z.infer<typeof ProviderOptionsSchema>
+export type V2APISettings = z.infer<typeof V2APISettingsSchema>
 export type GlobalSessionSettings = z.infer<typeof GlobalSessionSettingsSchema>
 export type ChatboxAILicenseDetail = z.infer<typeof ChatboxAILicenseDetailSchema>
 export type UnifiedTokenUsageDetail = z.infer<typeof UnifiedTokenUsageDetailSchema>

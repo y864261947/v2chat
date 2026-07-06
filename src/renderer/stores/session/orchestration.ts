@@ -1,15 +1,15 @@
 import { buildContext } from '@shared/context'
 import { ChatboxAIAPIError, OCRError } from '@shared/models/errors'
 import type { ChatStreamOptions, ModelStreamPart } from '@shared/models/types'
-import { type Message, type MessageContentParts, ModelProviderEnum } from '@shared/types'
+import { type Message, type MessageContentParts, ModelProviderEnum, type Settings } from '@shared/types'
 import { getMessageText, sequenceMessages } from '@shared/utils/message'
 import type { ToolSet } from 'ai'
 import { t } from 'i18next'
 import { createModel, createModelDependencies } from '@/adapters'
 import { getLogger } from '@/lib/utils'
-import * as appleAppStore from '@/packages/apple_app_store'
 import { convertToModelMessages, injectModelSystemPrompt } from '@/packages/model-calls/message-utils'
 import { estimateTokensFromMessages } from '@/packages/token'
+import { generateV2APISpeech, hasVoiceReplyIntent } from '@/packages/v2api-tts'
 import platform from '@/platform'
 import storage from '@/storage'
 import { StorageKeyGenerator } from '@/storage/StoreStorage'
@@ -33,6 +33,16 @@ import {
 } from './utils'
 
 const log = getLogger('session-orchestration')
+
+function getSharedV2APIKey(settings: Settings) {
+  const providers = settings.providers || {}
+  return (
+    providers[ModelProviderEnum.V2APIOpenAI]?.apiKey ||
+    providers[ModelProviderEnum.V2APIClaude]?.apiKey ||
+    providers[ModelProviderEnum.V2APIGemini]?.apiKey ||
+    ''
+  )
+}
 
 async function refreshSessionAttachmentStatuses(messages: Message[]): Promise<Message[]> {
   if (platform.type !== 'desktop') {
@@ -286,7 +296,46 @@ export async function orchestrateGeneration(
     }
 
     await persistStreamingMessage(sessionId, targetMsg, { refreshCounting: true })
-    appleAppStore.tickAfterMessageGenerated()
+
+    const latestUserMessage = [...messages.slice(0, targetMsgIx)].reverse().find((message) => message.role === 'user')
+    if (hasVoiceReplyIntent(latestUserMessage)) {
+      try {
+        const text = getMessageText(targetMsg, false, false).trim()
+        const audio = await generateV2APISpeech({
+          apiKey: getSharedV2APIKey(globalSettings),
+          input: text,
+          sessionId,
+          messageId: targetMsg.id,
+          model: globalSettings.v2api?.ttsModel,
+          voice: globalSettings.v2api?.ttsVoice,
+        })
+        targetMsg = {
+          ...targetMsg,
+          contentParts: [
+            ...targetMsg.contentParts,
+            {
+              type: 'audio',
+              storageKey: audio.storageKey,
+              mimeType: audio.mimeType,
+              transcript: text,
+            },
+          ],
+        }
+        await persistStreamingMessage(sessionId, targetMsg, { refreshCounting: true })
+      } catch (error) {
+        targetMsg = {
+          ...targetMsg,
+          contentParts: [
+            ...targetMsg.contentParts,
+            {
+              type: 'info',
+              text: `Voice generation failed: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+        }
+        await persistStreamingMessage(sessionId, targetMsg, { refreshCounting: true })
+      }
+    }
   } catch (err: unknown) {
     if (controller.signal.aborted) {
       targetMsg = {

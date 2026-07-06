@@ -162,7 +162,7 @@ export default function Sidebar() {
             <Flex align="center" gap="sm" onClick={() => navigate({ to: '/about' })} style={{ cursor: 'pointer' }}>
               <Image src={icon} w={20} h={20} />
               <Text span c="chatbox-secondary" size="xl" lh={1.2} fw="700">
-                Chatbox
+                V2Chat
               </Text>
               {/\d/.test(versionHook.version) && (
                 <Text span c="chatbox-tertiary" size="sm">
@@ -271,7 +271,7 @@ export default function Sidebar() {
                   color="chatbox-secondary"
                   size={24}
                   onClick={() => {
-                    navigate({ to: '/guide' })
+                    navigateToSettings('/v2api')
                     setShowSidebar(false)
                   }}
                 >
@@ -325,7 +325,7 @@ export default function Sidebar() {
                   className="rounded"
                   label={t('Help')}
                   leftSection={<ScalableIcon icon={IconHelpCircle} size={20} />}
-                  onClick={() => navigate({ to: '/guide' })}
+                  onClick={() => navigateToSettings('/v2api')}
                   variant="light"
                   p="xs"
                 />

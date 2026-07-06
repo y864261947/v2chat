@@ -34,7 +34,7 @@ describe('createAfetch', () => {
 
     await expect(
       afetch(
-        'https://api.chatboxai.app/gateway/openai/v1/chat/completions',
+        'http://localhost:8002/gateway/openai/v1/chat/completions',
         {},
         { parseChatboxRemoteError: true }
       )
@@ -59,7 +59,7 @@ describe('createAfetch', () => {
 
     await expect(
       afetch(
-        'https://api.chatboxai.app/gateway/openai/v1/chat/completions',
+        'http://localhost:8002/gateway/openai/v1/chat/completions',
         {},
         { parseChatboxRemoteError: true }
       )

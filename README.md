@@ -1,353 +1,177 @@
-<p align="right">
-  <a href="README.md">English</a> |
-  <a href="./doc/README-CN.md">简体中文</a>
-</p>
+# V2Chat
 
-<h1 align="center">
-<img src='./doc/statics/icon.png' width='30'>
-<span>
-    Chatbox
-    <span style="font-size:8px; font-weight: normal;">(Community Edition)</span>
-</span>
-</h1>
-<p align="center">
-    <em>Your Ultimate AI Copilot on the Desktop. <br />Chatbox is a desktop client for ChatGPT, Claude and other LLMs, available on Windows, Mac, Linux</em>
-</p>
+V2Chat 是一个基于 Chatbox Community Edition 改造的 V2API 专属 AI 聊天客户端。当前版本面向 Android APK 打包和本地开发，默认接入 V2API：
 
-<p align="center">
-<a href="https://github.com/chatboxai/chatbox/releases" target="_blank">
-<img alt="macOS" src="https://img.shields.io/badge/-macOS-black?style=flat-square&logo=apple&logoColor=white" />
-</a>
-<a href="https://github.com/chatboxai/chatbox/releases" target="_blank">
-<img alt="Windows" src="https://img.shields.io/badge/-Windows-blue?style=flat-square&logo=windows&logoColor=white" />
-</a>
-<a href="https://github.com/chatboxai/chatbox/releases" target="_blank">
-<img alt="Linux" src="https://img.shields.io/badge/-Linux-yellow?style=flat-square&logo=linux&logoColor=white" />
-</a>
-<a href="https://github.com/chatboxai/chatbox/releases" target="_blank">
-<img alt="Downloads" src="https://img.shields.io/github/downloads/chatboxai/chatbox/total.svg?style=flat" />
-</a>
-<a href="#features">
-<img alt="Privacy" src="https://img.shields.io/badge/-Local%20First-green?style=flat-square&logo=shield&logoColor=white" />
-</a>
-</p>
+- 固定 API Base URL：`https://v2api.top/v1`
+- 用户只需要在应用内填写 V2API API Key
+- 支持 OpenAI / Claude / Gemini 三种协议模型配置
+- 支持文本聊天、图片发送与识别
+- 支持在用户明确要求语音回复时生成可播放语音条
 
-<p align="center">
-<a href="https://www.producthunt.com/posts/chatbox?utm_source=badge-featured&utm_medium=badge&utm_souce=badge-chatbox" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=429547&theme=light" alt="Chatbox - Better&#0032;UI&#0032;&#0038;&#0032;Desktop&#0032;App&#0032;for&#0032;ChatGPT&#0044;&#0032;Claude&#0032;and&#0032;other&#0032;LLMs&#0046; | Product Hunt" style="width: 150px; height: 30px;" width="100" height="40" /></a>
-<a href="https://trendshift.io/repositories/14871" target="_blank"><img src="https://trendshift.io/api/badge/repositories/14871" alt="chatboxai%2Fchatbox | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
-</p>
+## 目录结构
 
-<p align="center">
-  <a href="./doc/statics/snapshot_light.png">
-    <img src="./doc/statics/snapshot_light.png" width="400"/>
-  </a>
-  <a href="./doc/statics/snapshot_dark.png">
-    <img src="./doc/statics/snapshot_dark.png" width="400"/>
-  </a>
-</p>
+- `src/renderer`：前端界面、设置页、聊天渲染、移动端 WebView 页面
+- `src/shared`：模型 provider、类型、默认配置、V2API 公共逻辑
+- `src/main`：Electron 主进程与部分桌面/本地能力
+- `android`：Capacitor Android 工程，用于生成 APK
+- `capacitor.config.ts`：移动端应用配置
 
-<div align="center" markdown="1">
-  <strong>Sponsored by Warp</strong>
-  <br>
-  <br>
-  <a href="https://go.warp.dev/chatbox">
-    <img alt="Warp sponsorship" width="400" src="https://raw.githubusercontent.com/warpdotdev/brand-assets/refs/heads/main/Github/Sponsor/Warp-Github-LG-02.png">
-  </a>
+## 环境要求
 
-### [Warp, built for coding with multiple AI agents.](https://go.warp.dev/chatbox)
-[Available for MacOS, Linux, & Windows](https://go.warp.dev/chatbox)<br>
-</div>
+建议使用 Windows 进行 Android 打包。本项目当前验证过的环境：
 
----
+- Node.js：`22.x`，要求 `>=22.12.0 <25.0.0`
+- pnpm：`10.x`，项目锁定 `pnpm@10.33.0`
+- JDK：`21`
+- Android SDK：需要 Android SDK Platform、Build Tools、Platform Tools、Command-line Tools
+- Git
 
-This is the repository for the Chatbox Community Edition, open-sourced under the GPLv3 license.
+如果使用 Android Studio，可以通过 SDK Manager 安装：
 
-[Chatbox is going open-source Again!](https://github.com/chatboxai/chatbox/issues/2266)
+- Android SDK Platform
+- Android SDK Build-Tools
+- Android SDK Command-line Tools
+- Android SDK Platform-Tools
 
-We regularly sync code from the pro repo to this repo, and vice versa.
+## 首次拉取与安装依赖
 
-## Download
+```powershell
+git clone https://github.com/y864261947/v2chat.git
+cd v2chat
 
-### Desktop
-
-<table style="width: 100%">
-  <tr>
-    <td width="25%" align="center">
-      <b>Windows</b>
-    </td>
-    <td width="25%" align="center" colspan="2">
-      <b>MacOS</b>
-    </td>
-    <td width="25%" align="center">
-      <b>Linux</b>
-    </td>
-  </tr>
-  <tr style="text-align: center">
-    <td align="center" valign="middle">
-      <a href='https://chatboxai.app/?c=download-windows'>
-        <img src='./doc/statics/windows.png' style="height:24px; width: 24px" />
-        <br />
-        <b>Setup.exe</b>
-      </a>
-    </td>
-    <td align="center" valign="middle">
-      <a href='https://chatboxai.app/?c=download-mac-intel'>
-        <img src='./doc/statics/mac.png' style="height:24px; width: 24px" />
-        <br />
-        <b>Intel</b>
-      </a>
-    </td>
-    <td align="center" valign="middle">
-      <a href='https://chatboxai.app/?c=download-mac-aarch'>
-        <img src='./doc/statics/mac.png' style="height:24px; width: 24px" />
-        <br />
-        <b style="white-space: nowrap;">Apple Silicon</b>
-      </a>
-    </td>
-    <td align="center" valign="middle">
-      <a href='https://chatboxai.app/?c=download-linux'>
-        <img src='./doc/statics/linux.png' style="height:24px; width: 24px" />
-        <br />
-        <b>AppImage</b>
-      </a>
-    </td>
-  </tr>
-</table>
-
-### iOS/Android
-
-<a href='https://apps.apple.com/app/chatbox-ai/id6471368056' style='margin-right: 4px'>
-<img src='./doc/statics/app_store.webp' style="height:38px;" />
-</a>
-<a href='https://play.google.com/store/apps/details?id=xyz.chatboxapp.chatbox' style='margin-right: 4px'>
-<img src='./doc/statics/google_play.png' style="height:38px;" />
-</a>
-<a href='https://chatboxai.app/install?download=android_apk' style='margin-right: 4px; display: inline-flex; justify-content: center'>
-<img src='./doc/statics/android.png' style="height:28px; display: inline-block" />
-.APK
-</a>
-
-For more information: [chatboxai.app](https://chatboxai.app/)
-
-## Quick Start
-
-### For End Users
-1. Download the appropriate installer for your platform from the [releases page](https://github.com/chatboxai/chatbox/releases)
-2. Install and launch Chatbox
-3. Configure your AI provider (OpenAI, Claude, etc.) in settings
-4. Start chatting!
-
-### System Requirements
-
-| Platform | Minimum Version | Architecture |
-|----------|----------------|--------------|
-| Windows | Windows 10 | x64 |
-| macOS | macOS 11 (Big Sur) | Intel/Apple Silicon |
-| Linux | Ubuntu 20.04+ / AppImage supported distros | x64 |
-
-<!-- <table>
-<tr>
-<td>
-<img src="./dec/../doc/demo_mobile_1.png" alt="App Screenshot" style="box-shadow: 2px 2px 10px rgba(0,0,0,0.1); border: 1px solid #ddd; border-radius: 8px; height: 300px" />
-</td>
-<td>
-<img src="./dec/../doc/demo_mobile_2.png" alt="App Screenshot" style="box-shadow: 2px 2px 10px rgba(0,0,0,0.1); border: 1px solid #ddd; border-radius: 8px; height: 300px" />
-</td>
-</tr>
-</table> -->
-
-## Features
-
-### 🤖 AI Model Support
--   **Support for Multiple LLM Providers**  
-    :gear: Seamlessly integrate with a variety of cutting-edge language models:
-    -   OpenAI (ChatGPT)
-    -   Azure OpenAI
-    -   Claude
-    -   Google Gemini Pro
-    -   Ollama (enable access to local models like llama2, Mistral, Mixtral, codellama, vicuna, yi, and solar)
-    -   ChatGLM-6B
-
--   **Image Generation with Dall-E-3**  
-    :art: Create the images of your imagination with Dall-E-3.
-
--   **Enhanced Prompting**  
-    :speech_balloon: Advanced prompting features to refine and focus your queries for better responses.
-
-### 🖥️ User Experience
--   **Local Data Storage**  
-    :floppy_disk: Your data remains on your device, ensuring it never gets lost and maintains your privacy.
-
--   **No-Deployment Installation Packages**  
-    :package: Get started quickly with downloadable installation packages. No complex setup necessary!
-
--   **Ergonomic UI & Dark Theme**  
-    :new_moon: A user-friendly interface with a night mode option for reduced eye strain during extended use.
-
--   **Keyboard Shortcuts**  
-    :keyboard: Stay productive with shortcuts that speed up your workflow.
-
--   **Streaming Reply**  
-    :arrow_forward: Provide rapid responses to your interactions with immediate, progressive replies.
-
-### 📄 Content & Formatting
--   **Markdown, Latex & Code Highlighting**  
-    :scroll: Generate messages with the full power of Markdown and Latex formatting, coupled with syntax highlighting for various programming languages, enhancing readability and presentation.
-
--   **Prompt Library & Message Quoting**  
-    :books: Save and organize prompts for reuse, and quote messages for context in discussions.
-
-### 👥 Collaboration & Sharing
--   **Team Collaboration**  
-    :busts_in_silhouette: Collaborate with ease and share OpenAI API resources among your team. [Learn More](./team-sharing/README.md)
-
-### 🌐 Platform Availability
--   **Cross-Platform Desktop**  
-    :computer: Chatbox is ready for Windows, Mac, and Linux users.
-
--   **Web Version**  
-    :globe_with_meridians: Use the web application on any device with a browser, anywhere.
-
--   **Mobile Apps**  
-    :phone: Native iOS and Android applications for on-the-go access.
-
-### 🌍 Localization
--   **Multilingual Support**  
-    :earth_americas: Catering to a global audience by offering support in multiple languages:
-    -   English
-    -   简体中文 (Simplified Chinese)
-    -   繁體中文 (Traditional Chinese)
-    -   日本語 (Japanese)
-    -   한국어 (Korean)
-    -   Français (French)
-    -   Deutsch (German)
-    -   Русский (Russian)
-    -   Español (Spanish)
-
-### ✨ More Features
--   **And More...**  
-    :sparkles: Constantly enhancing the experience with new features!
-
-## FAQ
-
--   [Frequently Asked Questions](./doc/FAQ.md)
-
-## How to Contribute
-
-We welcome contributions from the community! Here's how you can help make Chatbox better:
-
-### 🐛 Reporting Issues
-- Use [GitHub Issues](https://github.com/chatboxai/chatbox/issues) to report bugs or request features
-- Before creating a new issue, please search existing issues to avoid duplicates
-- Provide detailed information including steps to reproduce, expected behavior, and screenshots if applicable
-
-### 🔧 Pull Requests
-1. Fork the repository and create your branch from `main`
-2. Make your changes and ensure the code follows our coding standards
-3. Test your changes thoroughly
-4. Update documentation if needed
-5. Submit a pull request with a clear description of the changes
-
-### 🌍 Translations
-Help make Chatbox accessible to more people by contributing translations:
-- Translation files are located in the `src/locales` directory
-- Follow the existing translation format
-- Submit a PR with your translation improvements
-
-### 📖 Documentation
-- Improve README, API documentation, or user guides
-- Fix typos or clarify unclear instructions
-- Add examples and tutorials
-
-### 🌟 Other Ways to Contribute
-- Star the repository to show your support
-- Share Chatbox with others
-- Answer questions in [GitHub Discussions](https://github.com/chatboxai/chatbox/discussions)
-- Provide feedback and suggestions
-
-**Thank you for contributing! 🙏**
-
-## Development
-
-### Prerequisites
-
-Before you begin, ensure you have the following installed:
-
-- **Node.js** (v20.x – v22.x) - [Download here](https://nodejs.org/)
-- **pnpm** (v10.x or later) - Install via `corepack enable && corepack prepare pnpm@latest --activate`
-- **Git** - [Download here](https://git-scm.com/)
-
-### Quick Setup
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/chatboxai/chatbox.git
-   cd chatbox
-   ```
-
-2. **Install dependencies**
-   ```bash
-   pnpm install
-   ```
-
-3. **Start development server**
-   ```bash
-   pnpm run dev
-   ```
-   The application will start in development mode with hot-reload enabled.
-
-### Build Commands
-
-| Command | Description |
-|---------|-------------|
-| `pnpm run dev` | Start development server with hot-reload |
-| `pnpm run package` | Build and package for current platform |
-| `pnpm run package:all` | Build and package for all platforms |
-| `pnpm run build` | Build for production without packaging |
-| `pnpm run lint` | Run Biome to check code quality |
-| `pnpm run test` | Run Vitest test suite |
-
-### Project Structure
-
-```
-chatbox/
-├── src/
-│   ├── main/               # Electron main process
-│   ├── renderer/           # React renderer (UI)
-│   ├── preload/            # Electron preload scripts
-│   └── shared/             # Shared utilities
-├── doc/                    # Documentation and assets
-├── resources/              # App resources and icons
-├── team-sharing/           # Team collaboration features
-└── package.json            # Project configuration
+corepack enable
+corepack prepare pnpm@10.33.0 --activate
+pnpm install
 ```
 
-### Development Tips
+## Windows 环境变量示例
 
-- Use `pnpm run lint` before committing to ensure code quality
-- Follow the existing code style and patterns
-- Test your changes on both light and dark themes
-- Ensure cross-platform compatibility when making UI changes
+请按自己的安装路径调整。下面是 PowerShell 示例：
 
-### Troubleshooting
+```powershell
+$env:JAVA_HOME="C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot"
+$env:ANDROID_HOME="$env:LOCALAPPDATA\Android\Sdk"
+$env:ANDROID_SDK_ROOT="$env:LOCALAPPDATA\Android\Sdk"
+$env:Path="$env:JAVA_HOME\bin;$env:ANDROID_HOME\cmdline-tools\latest\bin;$env:ANDROID_HOME\platform-tools;$env:Path"
+```
 
-**Issue**: `pnpm install` fails
-- **Solution**: Ensure you're using pnpm (not npm or yarn) and Node.js version is within the required range. Run `corepack enable` if pnpm is not found.
+检查环境：
 
-**Issue**: Build fails on Windows
-- **Solution**: Run `pnpm config set script-shell "C:\\Program Files\\git\\bin\\bash.exe"` if using Git Bash
+```powershell
+node -v
+pnpm -v
+java -version
+adb version
+```
 
-**Issue**: Changes not reflecting in development
-- **Solution**: Stop the dev server, delete `node_modules/.vite`, and restart
+## 本地开发
 
-## Star History
+桌面开发模式：
 
-[![Star History Chart](https://api.star-history.com/svg?repos=chatboxai/chatbox&type=Date)](https://star-history.com/#chatboxai/chatbox&Date)
+```powershell
+pnpm dev
+```
 
-## Contact
+Web 构建预览：
 
-[Email](mailto:hi@chatboxai.com)
+```powershell
+pnpm run build:web
+pnpm run serve:web
+```
 
-## License
+类型检查：
 
-[LICENSE](./LICENSE)
+```powershell
+pnpm run check
+```
+
+## 打包 Android APK
+
+先构建前端并同步到 Android 工程：
+
+```powershell
+pnpm run mobile:sync:android
+```
+
+再进入 Android 工程生成 debug APK：
+
+```powershell
+cd android
+.\gradlew.bat assembleDebug
+```
+
+生成文件位置：
+
+```text
+android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+这个 APK 是 debug 签名包，可以直接发送到 Android 手机安装测试。正式发布前需要配置 release 签名并执行 release 打包流程。
+
+## 一键打包命令示例
+
+在项目根目录执行：
+
+```powershell
+pnpm run mobile:sync:android
+cd android
+.\gradlew.bat assembleDebug
+```
+
+## 常见问题
+
+### pnpm 命令不可用
+
+先启用 Corepack：
+
+```powershell
+corepack enable
+corepack prepare pnpm@10.33.0 --activate
+```
+
+### Gradle 找不到 JDK
+
+确认 `JAVA_HOME` 指向 JDK 21，并且 `java -version` 输出为 21。
+
+### 找不到 Android SDK
+
+确认 `ANDROID_HOME` 和 `ANDROID_SDK_ROOT` 指向 Android SDK 目录，例如：
+
+```powershell
+$env:LOCALAPPDATA\Android\Sdk
+```
+
+### mobile:sync:android 构建时间很长
+
+首次构建会下载依赖和生成大量前端产物，可能需要几分钟。后续构建会使用缓存，速度会快一些。
+
+### 构建时出现 chunk size、eval、flatDir warning
+
+这些是当前依赖和构建配置产生的 warning，不影响 debug APK 生成。只要命令最终显示 `BUILD SUCCESSFUL`，APK 就已经生成。
+
+## 应用内配置
+
+安装后打开 V2Chat：
+
+1. 进入设置里的 `V2API`
+2. 填写 V2API API Key
+3. 选择协议：OpenAI、Claude 或 Gemini
+4. 刷新模型列表，选择默认聊天模型、视觉模型和 TTS 配置
+5. 回到聊天页面开始使用
+
+## 当前验证命令
+
+当前改造版本已验证：
+
+```powershell
+pnpm run check
+pnpm run mobile:sync:android
+cd android
+.\gradlew.bat assembleDebug
+```
+
+最终 APK 输出路径：
+
+```text
+android/app/build/outputs/apk/debug/app-debug.apk
+```

@@ -20,6 +20,7 @@ import {
   defaultSessionsForEN,
   imageCreatorSessionForCN,
   imageCreatorSessionForEN,
+  legacyBuiltInSessionIds,
   mermaidSessionCN,
   mermaidSessionEN,
 } from '@/packages/initial_data'
@@ -58,7 +59,7 @@ type MigrateStore = {
   setBlob?: (key: string, value: string) => Promise<void>
 }
 
-export const CurrentVersion = 15
+export const CurrentVersion = 16
 
 async function doMigrateStorage(oldStorage: Storage) {
   // 找到老版本的数据，说明是升级，执行数据迁移操作
@@ -205,6 +206,7 @@ export async function migrateOnData(dataStore: MigrateStore, canRelaunch = true)
     migrate_12_to_13,
     migrate_13_to_14,
     migrate_14_to_15,
+    migrate_15_to_16,
   ]
 
   for (; configVersion < CurrentVersion; configVersion++) {
@@ -373,6 +375,7 @@ async function migrate_8_to_9(dataStore: MigrateStore): Promise<boolean> {
   const defaultSessionIds = uniq([
     ...defaultSessionsForEN.map((session) => session.id),
     ...defaultSessionsForCN.map((session) => session.id),
+    ...legacyBuiltInSessionIds,
   ])
 
   // 如果 intersectSessionIds 里还有值，说明之前成功执行过 7-8 的 migration，跳过找回步骤
@@ -822,5 +825,34 @@ async function migrate_14_to_15(dataStore: MigrateStore) {
   await sessionMetaStorage.createMany(records)
 
   log.info(`migrate_14_to_15, migrated ${records.length} session meta records to DB`)
+  return false
+}
+
+async function migrate_15_to_16(dataStore: MigrateStore) {
+  log.info(`migrate_15_to_16, hiding legacy built-in sessions: ${legacyBuiltInSessionIds.length}`)
+
+  const metaStorage = platform.getSessionMetaStorage()
+  await metaStorage.initialize()
+
+  for (const id of legacyBuiltInSessionIds) {
+    await metaStorage.update(id, { hidden: true })
+    const sessionKey = StorageKeyGenerator.session(id)
+    const session = await dataStore.getData<Session | null>(sessionKey, null)
+    if (session?.id) {
+      await dataStore.setData(sessionKey, {
+        ...session,
+        hidden: true,
+      })
+    }
+  }
+
+  const legacyList = await dataStore.getData<SessionMeta[]>(StorageKey.ChatSessionsList, [])
+  if (legacyList.length) {
+    await dataStore.setData(
+      StorageKey.ChatSessionsList,
+      legacyList.map((meta) => (legacyBuiltInSessionIds.includes(meta.id) ? { ...meta, hidden: true } : meta))
+    )
+  }
+
   return false
 }

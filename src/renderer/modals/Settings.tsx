@@ -20,7 +20,6 @@ import { getThemeDesign } from '@/hooks/useAppTheme'
 import useNeedRoomForWinControls from '@/hooks/useNeedRoomForWinControls'
 import { router } from '@/router'
 import { RouteComponent as SettingsChatRouteComponent } from '@/routes/settings/chat'
-import { RouteComponent as SettingsChatboxAiRouteComponent } from '@/routes/settings/chatbox-ai'
 import { RouteComponent as SettingsDefaultModelsRouteComponent } from '@/routes/settings/default-models'
 import { RouteComponent as SettingsDocumentParserRouteComponent } from '@/routes/settings/document-parser'
 import { RouteComponent as SettingsGeneralRouteComponent } from '@/routes/settings/general'
@@ -28,11 +27,11 @@ import { RouteComponent as SettingsHotkeysRouteComponent } from '@/routes/settin
 import { RouteComponent as SettingsIndexRouteComponent } from '@/routes/settings/index'
 import { RouteComponent as SettingsMcpRouteComponent } from '@/routes/settings/mcp'
 import { RouteComponent as SettingsProviderProviderIdRouteComponent } from '@/routes/settings/provider/$providerId'
-import { RouteComponent as SettingsProviderChatboxAiRouteComponent } from '@/routes/settings/provider/chatbox-ai'
 import { RouteComponent as SettingsProviderIndexRouteComponent } from '@/routes/settings/provider/index'
 import { RouteComponent as SettingsProviderRouteRouteComponent } from '@/routes/settings/provider/route'
 import { SettingsRoot } from '@/routes/settings/route'
 import { RouteComponent as SettingsSkillsRouteComponent } from '@/routes/settings/skills'
+import { RouteComponent as SettingsV2APIRouteComponent } from '@/routes/settings/v2api'
 import { RouteComponent as SettingsWebSearchRouteComponent } from '@/routes/settings/web-search'
 
 export type SettingsModalProps = {}
@@ -145,9 +144,9 @@ const SettingsIndexRoute = createRoute({
   getParentRoute: () => RootRoute,
 })
 
-const SettingsChatboxAiRoute = createRoute({
-  component: SettingsChatboxAiRouteComponent,
-  path: '/settings/chatbox-ai',
+const SettingsV2APIRoute = createRoute({
+  component: SettingsV2APIRouteComponent,
+  path: '/settings/v2api',
   getParentRoute: () => RootRoute,
 })
 
@@ -217,12 +216,6 @@ const SettingsProviderIndexRoute = createRoute({
   getParentRoute: () => SettingsProviderRouteRoute,
 })
 
-const SettingsProviderChatboxAiRoute = createRoute({
-  component: SettingsProviderChatboxAiRouteComponent,
-  path: '/chatbox-ai',
-  getParentRoute: () => SettingsProviderRouteRoute,
-})
-
 const SettingsProviderProviderIdRoute = createRoute({
   component: SettingsProviderProviderIdRouteComponent,
   path: '/$providerId',
@@ -231,13 +224,12 @@ const SettingsProviderProviderIdRoute = createRoute({
 
 SettingsProviderRouteRoute.addChildren([
   SettingsProviderIndexRoute,
-  SettingsProviderChatboxAiRoute,
   SettingsProviderProviderIdRoute,
 ])
 
 const routeTree = RootRoute.addChildren([
   SettingsIndexRoute,
-  SettingsChatboxAiRoute,
+  SettingsV2APIRoute,
   SettingsGeneralRoute,
   SettingsChatRoute,
   SettingsWebSearchRoute,

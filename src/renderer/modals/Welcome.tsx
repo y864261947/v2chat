@@ -30,33 +30,33 @@ const Welcome = NiceModal.create(() => {
           <Stack gap="sm" align="center">
             <Image src={icon} w={86} h={86} />
             <Stack gap="3xs" align="center">
-              <Title order={3}>Chatbox</Title>
-              <Text size="md">{t('An easy-to-use AI client app')}</Text>
+              <Title order={3}>V2Chat</Title>
+              <Text size="md">V2API powered AI chat</Text>
             </Stack>
           </Stack>
 
           <List size="sm" c="chatbox-secondary" className="flex flex-col items-center">
-            <List.Item>{t('Supports a variety of advanced AI models')}</List.Item>
+            <List.Item>OpenAI / Claude / Gemini protocols via V2API</List.Item>
             <List.Item>{t('All data is stored locally, ensuring privacy and rapid access')}</List.Item>
-            <List.Item>{t('Ideal for both work and educational scenarios')}</List.Item>
+            <List.Item>Supports text, image understanding, and voice replies</List.Item>
           </List>
         </Stack>
 
         <Paper shadow="none" radius="md" withBorder p="lg">
           <Stack gap="sm">
-            <Text className="text-center">{t('Select and configure an AI model provider')}</Text>
+            <Text className="text-center">Configure your V2API API Key to start using V2Chat.</Text>
             <Button
               size="lg"
               h={54}
               radius="md"
               classNames={{ root: '!outline-none', label: 'flex flex-col items-center justify-center' }}
               onClick={() => {
-                navigateToSettings('/provider/chatbox-ai')
+                navigateToSettings('/v2api')
                 modal.resolve('setup')
                 modal.hide()
               }}
             >
-              {t('Setup Provider')}
+              Setup V2API
             </Button>
           </Stack>
         </Paper>

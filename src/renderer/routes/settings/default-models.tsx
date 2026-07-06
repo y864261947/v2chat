@@ -58,7 +58,7 @@ export function RouteComponent() {
         </ModelSelector>
 
         <Text c="chatbox-tertiary" size="xs">
-          {t('Chatbox will use this model as the default for new chats.')}
+          V2Chat will use this model as the default for new chats.
         </Text>
       </Stack>
 
@@ -93,7 +93,7 @@ export function RouteComponent() {
         </ModelSelector>
 
         <Text c="chatbox-tertiary" size="xs">
-          {t('Chatbox will automatically use this model to rename threads.')}
+          V2Chat will automatically use this model to rename threads.
         </Text>
       </Stack>
 
@@ -128,7 +128,7 @@ export function RouteComponent() {
         </ModelSelector>
 
         <Text c="chatbox-tertiary" size="xs">
-          {t('Chatbox will automatically use this model to construct search term.')}
+          V2Chat will automatically use this model to construct search terms.
         </Text>
       </Stack>
       <Stack gap="xs">
@@ -137,7 +137,7 @@ export function RouteComponent() {
         <ModelSelector
           position="bottom-start"
           showAuto={true}
-          autoText={settings.licenseKey ? t('Auto (Use Chatbox AI)')! : t('None')!}
+          autoText={t('None')!}
           width={320}
           modelFilter={(model) => model.capabilities?.includes('vision') ?? false}
           selectedProviderId={settings.ocrModel?.provider}
@@ -156,14 +156,14 @@ export function RouteComponent() {
           }
         >
           <ModelSelectContent
-            autoText={settings.licenseKey ? t('Auto (Use Chatbox AI)')! : t('None')!}
+            autoText={t('None')!}
             provider={settings.ocrModel?.provider}
             model={settings.ocrModel?.model}
           />
         </ModelSelector>
 
         <Text c="chatbox-tertiary" size="xs">
-          {t('Chatbox OCRs images with this model and sends the text to models without image support.')}
+          V2Chat OCRs images with this model and sends the text to models without image support.
         </Text>
       </Stack>
     </Stack>

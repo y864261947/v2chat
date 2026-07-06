@@ -89,7 +89,7 @@ export function getParserDisplayName(type: DocumentParserType): string {
     case 'local':
       return 'Local'
     case 'chatbox-ai':
-      return 'Chatbox AI'
+      return 'V2API Cloud'
     case 'mineru':
       return 'MinerU'
     default:

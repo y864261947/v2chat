@@ -48,7 +48,7 @@ const ToolCallErrorDetails: FC<{ part: MessageToolCallPart }> = ({ part }) => {
   if (errorCode && ChatboxAIAPIError.getDetail(errorCode)) {
     return (
       <Text size="sm" c="chatbox-error" component="div">
-        <ChatboxAIErrorMessage errorCode={errorCode} trackingSource="msg_tool_error" />
+        <ChatboxAIErrorMessage errorCode={errorCode} />
       </Text>
     )
   }

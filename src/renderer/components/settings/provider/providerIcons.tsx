@@ -23,6 +23,9 @@ const PROVIDER_ICON_ALIASES: Record<string, string> = {
 }
 
 export const FEATURED_PROVIDER_IDS: string[] = [
+  ModelProviderEnum.V2APIOpenAI,
+  ModelProviderEnum.V2APIClaude,
+  ModelProviderEnum.V2APIGemini,
   ModelProviderEnum.OpenAI,
   ModelProviderEnum.Claude,
   ModelProviderEnum.Gemini,

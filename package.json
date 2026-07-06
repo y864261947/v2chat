@@ -1,13 +1,13 @@
 {
   "name": "xyz.chatboxapp.ce",
-  "productName": "xyz.chatboxapp.ce",
+  "productName": "V2Chat",
   "version": "0.0.1",
   "engines": {
     "node": ">=22.12.0 <25.0.0",
     "pnpm": ">=10.17.0"
   },
   "private": true,
-  "description": "A desktop client for multiple cutting-edge AI models",
+  "description": "V2API-powered AI chat client",
   "main": "out/main/main.js",
   "scripts": {
     "generate:model-snapshot": "pnpm exec tsx scripts/generate-model-snapshot.ts",
@@ -66,7 +66,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/chatboxai/chatbox.git"
+    "url": "https://github.com/y864261947/v2chat.git"
   },
   "keywords": [],
   "author": {

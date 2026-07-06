@@ -7,8 +7,8 @@ export const chatboxAIProvider = defineProvider({
   name: 'Chatbox AI',
   type: ModelProviderType.ChatboxAI,
   urls: {
-    website: 'https://chatboxai.app',
-    docs: 'https://chatboxai.app/help-center',
+    website: '',
+    docs: '',
   },
   createModel: (config) => {
     return new ChatboxAI(

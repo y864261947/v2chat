@@ -93,17 +93,17 @@ export const KnowledgeBaseChatboxAIInfo: React.FC<KnowledgeBaseChatboxAIInfoProp
     <Stack gap="sm">
       {showModelsLabel && (
         <Group>
-          {t('Models')}: <Pill>Chatbox AI</Pill>
+          {t('Models')}: <Pill>V2API Cloud</Pill>
         </Group>
       )}
       <Text size="sm" c="dimmed">
         {t(
-          'Chatbox AI provides all the essential model support required for knowledge base processing. Consumes compute points.'
+          'V2API Cloud provides the model support required for knowledge base processing. Consumes API usage.'
         )}
       </Text>
       {hasError && (
         <Text size="sm" c="red">
-          {t('Failed to load Chatbox AI models configuration')}
+          {t('Failed to load V2API Cloud models configuration')}
         </Text>
       )}
     </Stack>
@@ -130,7 +130,7 @@ export const KnowledgeBaseProviderModeSelect: React.FC<KnowledgeBaseProviderMode
       onChange={(value) => onChange(value as 'chatbox-ai' | 'custom')}
     >
       <Group mt="xs">
-        <Radio value="chatbox-ai" label="Chatbox AI" disabled={isChatboxAIDisabled} />
+        <Radio value="chatbox-ai" label="V2API Cloud" disabled={isChatboxAIDisabled} />
         <Radio value="custom" label={t('Custom')} />
       </Group>
     </Radio.Group>
@@ -224,9 +224,9 @@ const PARSER_OPTIONS: { value: DocumentParserType; label: string; description: s
   },
   {
     value: 'chatbox-ai',
-    label: 'Chatbox AI',
+    label: 'V2API Cloud',
     description:
-      'Cloud-based document parsing service, supports PDF, Office files, EPUB and many other file types. Consumes compute points.',
+      'Cloud-based document parsing service, supports PDF, Office files, EPUB and many other file types. Consumes API usage.',
   },
   {
     value: 'mineru',

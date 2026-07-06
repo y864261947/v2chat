@@ -107,6 +107,15 @@ export const MessageImagePartSchema = z.object({
   ocrResult: z.string().optional(),
 })
 
+export const MessageAudioPartSchema = z.object({
+  type: z.literal('audio'),
+  storageKey: z.string(),
+  mimeType: z.string(),
+  durationMs: z.number().optional(),
+  transcript: z.string().optional(),
+  error: z.string().optional(),
+})
+
 export const MessageInfoPartSchema = z.object({
   type: z.literal('info'),
   text: z.string(),
@@ -132,6 +141,7 @@ export const MessageToolCallPartSchema = z.object({
 export const MessageContentPartSchema = z.discriminatedUnion('type', [
   MessageTextPartSchema,
   MessageImagePartSchema,
+  MessageAudioPartSchema,
   MessageInfoPartSchema,
   MessageReasoningPartSchema,
   MessageToolCallPartSchema,
@@ -321,6 +331,7 @@ export type MessageLink = z.infer<typeof MessageLinkSchema>
 export type MessagePicture = z.infer<typeof MessagePictureSchema>
 export type MessageTextPart = z.infer<typeof MessageTextPartSchema>
 export type MessageImagePart = z.infer<typeof MessageImagePartSchema>
+export type MessageAudioPart = z.infer<typeof MessageAudioPartSchema>
 export type MessageInfoPart = z.infer<typeof MessageInfoPartSchema>
 export type MessageReasoningPart = z.infer<typeof MessageReasoningPartSchema>
 export type MessageToolCallPart<Args = unknown, Result = unknown> = z.infer<typeof MessageToolCallPartSchema> & {

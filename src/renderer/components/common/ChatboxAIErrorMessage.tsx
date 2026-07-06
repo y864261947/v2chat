@@ -2,20 +2,13 @@ import { Link } from '@mui/material'
 import { ChatboxAIAPIError } from '@shared/models/errors'
 import type { FC } from 'react'
 import { Trans } from 'react-i18next'
-import LinkTargetBlank from '@/components/common/Link'
 import { navigateToSettings } from '@/modals/Settings'
-import { trackingEvent } from '@/packages/event'
-import { buildChatboxUrl } from '@/packages/remote'
-import platform from '@/platform'
-import * as settingActions from '@/stores/settingActions'
 import { useSettingsStore } from '@/stores/settingsStore'
 
 interface ChatboxAIErrorMessageProps {
   errorCode: number
   /** Optional model name for `{{model}}` interpolation in i18n keys. */
   model?: string
-  /** Tracking source label appended to upgrade-link analytics events. */
-  trackingSource?: string
 }
 
 const SUPPORTED_WEB_BROWSING_MODELS = 'gemini-2.0-flash(API), perplexity API'
@@ -28,10 +21,9 @@ const SUPPORTED_WEB_BROWSING_MODELS = 'gemini-2.0-flash(API), perplexity API'
 export const ChatboxAIErrorMessage: FC<ChatboxAIErrorMessageProps> = ({
   errorCode,
   model,
-  trackingSource = 'msg_upgrade_required',
 }) => {
   const licensePlanName = useSettingsStore((s) => s.licensePlanName)
-  const isFreePlan = licensePlanName === 'Chatbox AI Free'
+  const isFreePlan = licensePlanName === 'V2Chat Free'
   const codeName = isFreePlan ? 'token_quota_exhausted_free' : undefined
   const detail = ChatboxAIAPIError.getDetail(errorCode, codeName)
   if (!detail) return null
@@ -70,32 +62,13 @@ export const ChatboxAIErrorMessage: FC<ChatboxAIErrorMessageProps> = ({
             type="button"
             className="cursor-pointer italic"
             onClick={() => {
-              platform.openLink(
-                buildChatboxUrl(
-                  `/redirect_app/view_more_plans/${settingActions.getLanguage()}?utm_source=app&utm_content=${trackingSource}`
-                )
-              )
-              trackingEvent('click_view_more_plans_button_from_upgrade_error_tips', {
-                event_category: 'user',
-              })
+              navigateToSettings('/v2api')
             }}
           />
         ),
-        LinkToHomePage: <LinkTargetBlank href="https://chatboxai.app" />,
-        LinkToAdvancedFileProcessing: (
-          <LinkTargetBlank
-            href={buildChatboxUrl(
-              `/redirect_app/advanced_file_processing/${settingActions.getLanguage()}?utm_source=app&utm_content=${trackingSource}`
-            )}
-          />
-        ),
-        LinkToAdvancedUrlProcessing: (
-          <LinkTargetBlank
-            href={buildChatboxUrl(
-              `/redirect_app/advanced_url_processing/${settingActions.getLanguage()}?utm_source=app&utm_content=${trackingSource}`
-            )}
-          />
-        ),
+        LinkToHomePage: <span />,
+        LinkToAdvancedFileProcessing: <span />,
+        LinkToAdvancedUrlProcessing: <span />,
         OpenDocumentParserSettingButton: (
           <Link
             component="button"

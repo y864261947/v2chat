@@ -5,13 +5,9 @@ import platform from '@/platform'
 import { authInfoStore } from '@/stores/authInfoStore'
 import {
   CHATBOX_BUILD_CHANNEL,
-  USE_BETA_API,
-  USE_BETA_CHATBOX,
   USE_LOCAL_API,
   USE_LOCAL_CHATBOX,
-  USE_NEWDB_API,
 } from '@/variables'
-import * as chatboxaiAPI from '../../shared/request/chatboxai_pool'
 import { createAfetch, createAuthenticatedAfetch, uploadFile } from '../../shared/request/request'
 import {
   type ChatboxAILicenseDetail,
@@ -97,27 +93,18 @@ async function getAuthenticatedAfetch() {
 
 // ========== API ORIGIN 根据可用性维护 ==========
 
-// const RELEASE_ORIGIN = 'https://releases.chatboxai.app'
 export function getAPIOrigin() {
   if (USE_LOCAL_API) {
     return 'http://localhost:8002'
-  } else if (USE_BETA_API) {
-    return 'https://api-beta.chatboxai.app'
-  } else if (USE_NEWDB_API) {
-    return 'https://beta-new-db.chatboxai.app'
-  } else {
-    return chatboxaiAPI.getChatboxAPIOrigin()
   }
+  throw new Error('Official Chatbox API origin is disabled in the debranded build.')
 }
 
 export function getChatboxOrigin() {
   if (USE_LOCAL_CHATBOX) {
     return 'http://localhost:3002'
-  } else if (USE_BETA_CHATBOX) {
-    return 'https://beta.chatboxai.app'
-  } else {
-    return 'https://chatboxai.app'
   }
+  return '/'
 }
 
 export function buildChatboxUrl(path: string) {
@@ -140,7 +127,6 @@ export async function checkNeedUpdate(version: string, os: string, config: Confi
   type Response = {
     need_update?: boolean
   }
-  // const res = await ofetch<Response>(`${RELEASE_ORIGIN}/chatbox_need_update/${version}`, {
   const res = await ofetch<Response>(`${getAPIOrigin()}/chatbox_need_update/${version}`, {
     method: 'POST',
     retry: 3,
@@ -521,22 +507,8 @@ export async function parseUserLinkPro(params: { licenseKey: string; url: string
   }
 }
 
-export async function parseUserLinkFree(params: { url: string }) {
-  type Response = {
-    title: string
-    text: string
-  }
-  const afetch = await getAfetch()
-  const res = await afetch(`https://cors-proxy.chatboxai.app/api/fetch-webpage`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(await getChatboxHeaders()),
-    },
-    body: JSON.stringify(params),
-  })
-  const json: Response = await res.json()
-  return json
+export async function parseUserLinkFree(params: { url: string }): Promise<{ text: string; title: string }> {
+  throw new Error(`Official webpage proxy is disabled: ${params.url}`)
 }
 
 export async function webBrowsing(params: { licenseKey: string; query: string }) {
@@ -1024,7 +996,9 @@ export async function listLicensesByUser(): Promise<UserLicense[]> {
 
 // ========== Image Generation API ==========
 
-const IMAGE_GEN_API_ORIGIN = getAPIOrigin()
+function getImageGenAPIOrigin() {
+  return getAPIOrigin()
+}
 
 export interface ImageCompletionRequest {
   model: string
@@ -1066,7 +1040,7 @@ export async function submitImageGeneration(
 ): Promise<ImageGenerationTaskResponse> {
   const afetch = await getAfetch()
   const res = await afetch(
-    `${IMAGE_GEN_API_ORIGIN}/api/images/async_generations`,
+    `${getImageGenAPIOrigin()}/api/images/async_generations`,
     {
       method: 'POST',
       headers: {
@@ -1092,7 +1066,7 @@ export async function pollImageTask(
 ): Promise<ImageGenerationTaskResponse> {
   const afetch = await getAfetch()
   const res = await afetch(
-    `${IMAGE_GEN_API_ORIGIN}/api/images/async_generations/${taskId}`,
+    `${getImageGenAPIOrigin()}/api/images/async_generations/${taskId}`,
     {
       method: 'GET',
       headers: {
