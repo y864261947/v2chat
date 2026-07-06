@@ -1267,10 +1267,9 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
           {currentSessionId && <CompactionStatus sessionId={currentSessionId} />}
           <Stack
             className={cn(
-              'rounded-md bg-chatbox-background-secondary justify-between px-3 py-2',
+              'v2chat-input-elevated justify-between px-3 py-2',
               !isSmallScreen && 'min-h-[92px]'
             )}
-            style={{ border: '1px solid var(--chatbox-border-primary)' }}
             gap="xs"
           >
             {/* Input Row */}

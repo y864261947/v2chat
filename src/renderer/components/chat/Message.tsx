@@ -393,13 +393,13 @@ const _Message: FC<Props> = (props) => {
           isBubbleLayout ? 'inline-block max-w-full' : msg.role === 'assistant' ? 'w-full' : 'inline-block',
           isBubbleLayout
             ? cn(
-                'px-4 py-1 rounded-2xl',
+                'px-4 py-1',
                 msg.role === 'user'
-                  ? 'bg-[var(--mantine-color-chatbox-brand-filled)] text-white'
+                  ? 'v2chat-message-bubble-user text-chatbox-tint-primary'
                   : msg.role === 'assistant'
                     ? msg.error
-                      ? 'bg-chatbox-background-error-secondary border border-solid border-chatbox-border-error'
-                      : 'bg-chatbox-background-secondary'
+                      ? 'bg-chatbox-background-error-secondary border border-solid border-chatbox-border-error rounded-2xl'
+                      : cn('v2chat-message-bubble-assistant', msg.generating && 'generating')
                     : 'bg-chatbox-background-secondary rounded-lg'
               )
             : msg.role !== 'assistant'
