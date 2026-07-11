@@ -417,8 +417,8 @@ describe('migrateStorage test', () => {
     const migration = await import('@/stores/migration')
     await migration._migrateStorageForTest()
 
-    // Should set current version (15) to IPC file storage (Desktop platform)
-    expect(ipcFileData[StorageKey.ConfigVersion]).toBe(JSON.stringify(15))
+    // Should set the current version to IPC file storage (Desktop platform)
+    expect(ipcFileData[StorageKey.ConfigVersion]).toBe(JSON.stringify(16))
     expect(initData).toHaveBeenCalled()
   })
 

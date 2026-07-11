@@ -27,18 +27,25 @@ import {
   IconAlertCircle,
   IconArrowBackUp,
   IconArrowUp,
+  IconBrain,
   IconChevronRight,
   IconCirclePlus,
   IconFilePencil,
   IconFolder,
+  IconGridDots,
   IconHammer,
   IconLink,
+  IconMicrophone,
   IconPhoto,
   IconPlayerStopFilled,
   IconPlus,
   IconSettings,
+  IconSparkles,
   IconVocabulary,
+  IconVolume,
   IconWorldWww,
+  IconWriting,
+  IconX,
 } from '@tabler/icons-react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
@@ -70,6 +77,7 @@ import {
   useModelRegistryVersion,
 } from '@/packages/model-registry'
 import * as picUtils from '@/packages/pic_utils'
+import { transcribeAudio } from '@/packages/v2api-tts'
 import platform from '@/platform'
 import { StorageKeyGenerator } from '@/storage/StoreStorage'
 import * as atoms from '@/stores/atoms'
@@ -84,6 +92,7 @@ import { trackEvent } from '@/utils/track'
 import {
   type KnowledgeBase,
   type Message,
+  type MessageAudioPart,
   ModelProviderEnum,
   type SessionAttachment,
   type SessionAttachmentIndexingStage,
@@ -99,8 +108,6 @@ import { CompactionStatus } from '../chat/CompactionStatus'
 import { AdaptiveModal } from '../common/AdaptiveModal'
 import { CompressionModal } from '../common/CompressionModal'
 import { ScalableIcon } from '../common/ScalableIcon'
-import Disclaimer from '../Disclaimer'
-import ProviderImageIcon from '../icons/ProviderImageIcon'
 import KnowledgeBaseMenu from '../knowledge-base/KnowledgeBaseMenu'
 import ModelSelector from '../ModelSelector'
 import MCPMenu from '../mcp/MCPMenu'
@@ -237,12 +244,27 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
     const { t } = useTranslation()
     const navigate = useNavigate()
     const isSmallScreen = useIsSmallScreen()
+    const useImComposer = true
     const toolbarIconSize = isSmallScreen ? 22 : 18
     const { height: viewportHeight } = useViewportSize()
     const pasteLongTextAsAFile = useSettingsStore((state) => state.pasteLongTextAsAFile)
     const shortcuts = useSettingsStore((state) => state.shortcuts)
     const widthFull = useUIStore((s) => s.widthFull) || fullWidth
     const saveBlob = useSaveBlob()
+    const [isRecording, setIsRecording] = useState(false)
+    const [isPressToTalkActive, setIsPressToTalkActive] = useState(false)
+    const [isPressToTalkCancelling, setIsPressToTalkCancelling] = useState(false)
+    const [recordingDurationMs, setRecordingDurationMs] = useState(0)
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+    const recordingChunksRef = useRef<Blob[]>([])
+    const recordingStreamRef = useRef<MediaStream | null>(null)
+    const recordingStartedAtRef = useRef(0)
+    const pressToTalkTimerRef = useRef<number | null>(null)
+    const pressToTalkPointerIdRef = useRef<number | null>(null)
+    const pressToTalkStartYRef = useRef<number | null>(null)
+    const pressToTalkCancellingRef = useRef(false)
+    const pressToTalkActiveRef = useRef(false)
+    const suppressRecordingClickRef = useRef(false)
 
     const currentSessionId = sessionId
     const isNewSession = currentSessionId === 'new'
@@ -279,6 +301,7 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
     const messageInputFieldRef = useRef<MessageInputFieldRef>(null)
     const latestInputRef = useRef('')
     const [hasTextContent, setHasTextContent] = useState(false)
+    const [activeTavernQuickActionId, setActiveTavernQuickActionId] = useState<string | null>(null)
     const draftMessageIdRef = useRef<string | undefined>(undefined)
 
     const debouncedUpdateTimerRef = useRef<ReturnType<typeof setTimeout>>()
@@ -313,6 +336,7 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
       draftMessageIdRef.current = preConstructedMessage.draftMessageId
     }, [preConstructedMessage.draftMessageId])
     const pictureKeys = preConstructedMessage.pictureKeys || []
+    const audioParts = preConstructedMessage.audioParts || []
     const attachments = preConstructedMessage.attachments || []
 
     const { session: currentSession } = useSession(sessionId || null)
@@ -345,6 +369,7 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
         preConstructedMessage.draftMessageId,
         text,
         pictureKeys,
+        audioParts,
         preConstructedMessage.preprocessedFiles,
         preConstructedMessage.preprocessedLinks
       )
@@ -359,6 +384,7 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
     }, [
       preConstructedMessage.draftMessageId,
       pictureKeys,
+      audioParts,
       attachments,
       links,
       preConstructedMessage.preprocessedFiles,
@@ -423,8 +449,16 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
     )
 
     const disableSubmit = useMemo(
-      () => !(hasTextContent || links?.length || attachments?.length || pictureKeys?.length),
-      [hasTextContent, links, attachments, pictureKeys]
+      () =>
+        !(
+          hasTextContent ||
+          activeTavernQuickActionId ||
+          links?.length ||
+          attachments?.length ||
+          pictureKeys?.length ||
+          audioParts?.length
+        ),
+      [hasTextContent, activeTavernQuickActionId, links, attachments, pictureKeys, audioParts]
     )
 
     const { providers } = useProviders()
@@ -503,6 +537,18 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
       )
       return `${modelInfo?.nickname || model.modelId}`
     }, [providers, model, t])
+
+    const handleModelSelect = useCallback(
+      (provider: string, modelId: string) => {
+        onSelectModel?.(provider, modelId)
+        const providerInfo = providers.find((item) => item.id === provider)
+        const selectedModel = (providerInfo?.models || providerInfo?.defaultSettings?.models)?.find(
+          (item) => item.modelId === modelId
+        )
+        toastActions.add(`已切换到 ${selectedModel?.nickname || modelId}`, 1800)
+      },
+      [onSelectModel, providers]
+    )
 
     // Get model info for context window
     const modelInfo = useMemo(() => {
@@ -669,7 +715,12 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
     const { addInputBoxHistory, getPreviousHistoryInput, getNextHistoryInput, resetHistoryIndex } = useInputBoxHistory()
     resetHistoryIndexRef.current = resetHistoryIndex
 
-    type SubmitOptions = { allowUnreadySessionAttachments?: boolean }
+    type SubmitOptions = {
+      allowUnreadySessionAttachments?: boolean
+      audioPartsOverride?: MessageAudioPart[]
+      force?: boolean
+      textOverride?: string
+    }
     const handleSubmitRef = useRef<(needGenerating?: boolean, options?: SubmitOptions) => void>(() => {})
     const getPreviousHistoryInputRef = useRef(getPreviousHistoryInput)
     getPreviousHistoryInputRef.current = getPreviousHistoryInput
@@ -678,10 +729,313 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
     const insertFilesRef = useRef<(files: File[]) => void>(() => {})
     const insertLinksRef = useRef<(urls: string[]) => void>(() => {})
 
+    useEffect(() => {
+      if (!isRecording) return undefined
+      const timer = window.setInterval(() => {
+        setRecordingDurationMs(Date.now() - recordingStartedAtRef.current)
+      }, 250)
+      return () => window.clearInterval(timer)
+    }, [isRecording])
+
+    useEffect(() => {
+      return () => {
+        recordingStreamRef.current?.getTracks().forEach((track) => track.stop())
+      }
+    }, [])
+
+    const appendTranscriptToInput = useCallback((transcript: string) => {
+      const text = transcript.trim()
+      if (!text) return latestInputRef.current
+      const next = latestInputRef.current.trim() ? `${latestInputRef.current.trimEnd()}\n${text}` : text
+      latestInputRef.current = next
+      setHasTextContent(next.trim().length > 0)
+      messageInputFieldRef.current?.setValue(next)
+      return next
+    }, [])
+
+    const handleStartRecording = useCallback(async () => {
+      if ((preConstructedMessageRef.current.audioParts || []).length >= 4) {
+        toastActions.add('最多可发送 4 条语音，请先删除一条再录。')
+        return false
+      }
+      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+        toastActions.add('当前环境不支持麦克风录音。')
+        return false
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        const mimeType = getPreferredRecordingMimeType()
+        const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
+        recordingChunksRef.current = []
+        recordingStreamRef.current = stream
+        mediaRecorderRef.current = recorder
+        recordingStartedAtRef.current = Date.now()
+        setRecordingDurationMs(0)
+
+        recorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            recordingChunksRef.current.push(event.data)
+          }
+        }
+        recorder.start()
+        setIsRecording(true)
+        return true
+      } catch (error) {
+        toastActions.add(`无法开始录音：${error instanceof Error ? error.message : String(error)}`)
+        return false
+      }
+    }, [])
+
+    const handleStopRecording = useCallback(async () => {
+      const recorder = mediaRecorderRef.current
+      if (!recorder || recorder.state === 'inactive') {
+        setIsRecording(false)
+        return null
+      }
+
+      const durationMs = Date.now() - recordingStartedAtRef.current
+      const stoppedBlob = new Promise<Blob>((resolve) => {
+        recorder.onstop = () => {
+          const mimeType = recorder.mimeType || recordingChunksRef.current[0]?.type || 'audio/webm'
+          resolve(new Blob(recordingChunksRef.current, { type: mimeType }))
+        }
+      })
+
+      recorder.stop()
+      recordingStreamRef.current?.getTracks().forEach((track) => track.stop())
+      recordingStreamRef.current = null
+      mediaRecorderRef.current = null
+      setIsRecording(false)
+
+      const audioBlob = await stoppedBlob
+      if (audioBlob.size === 0) {
+        toastActions.add('录音为空，请重新录制。')
+        return null
+      }
+
+      const storageKey = StorageKeyGenerator.audio('input-box-recording')
+      const dataUrl = await blobToDataUrl(audioBlob)
+      await saveBlob.mutateAsync({ key: storageKey, value: dataUrl })
+
+      let transcript = ''
+      try {
+        transcript = await transcribeAudio({
+          audio: audioBlob,
+          durationMs,
+          fileName: `v2chat-recording-${Date.now()}.webm`,
+        })
+        appendTranscriptToInput(transcript)
+      } catch (error) {
+        toastActions.add(`语音转写失败：${error instanceof Error ? error.message : String(error)}`)
+      }
+
+      const audioPart: MessageAudioPart = {
+        type: 'audio',
+        storageKey,
+        mimeType: audioBlob.type || 'audio/webm',
+        durationMs,
+        transcript: transcript || undefined,
+      }
+      const nextAudioParts = [...(preConstructedMessageRef.current.audioParts || []), audioPart].slice(0, 4)
+      preConstructedMessageRef.current = {
+        ...preConstructedMessageRef.current,
+        audioParts: nextAudioParts,
+      }
+      setPreConstructedMessage((prev) => ({
+        ...prev,
+        audioParts: [...(prev.audioParts || []), audioPart].slice(0, 4),
+      }))
+      return { audioPart, audioParts: nextAudioParts }
+    }, [appendTranscriptToInput, saveBlob, setPreConstructedMessage])
+
+    const tavernQuickActions = useMemo(
+      () => [
+        {
+          id: 'continue',
+          label: '继续剧情',
+          icon: IconSparkles,
+          hint: '让角色顺着当前上下文往下演。',
+          prompt: '继续剧情。请结合当前上下文推进一小段，保持角色口吻，回复不要太长。',
+        },
+        {
+          id: 'short',
+          label: '简短回复',
+          icon: IconWriting,
+          hint: '控制长度，适合快节奏对话。',
+          prompt: '简短回复。请结合当前上下文，用角色口吻回复我，控制在两三句话内。',
+        },
+        {
+          id: 'scene',
+          label: '描写场景',
+          icon: IconVocabulary,
+          hint: '补充环境、动作和氛围。',
+          prompt: '描写当前场景。请结合当前剧情，描写此刻的环境、动作和氛围，保持沉浸感，不要太长。',
+        },
+        {
+          id: 'image',
+          label: '剧情生图',
+          icon: IconPhoto,
+          hint: '根据剧情生成当前画面。',
+          prompt: '剧情生图。请根据当前聊天剧情生成一张画面，先整理成适合生图的提示词，然后生成图片。',
+        },
+        {
+          id: 'voice',
+          label: '语音回复',
+          icon: IconVolume,
+          hint: '让角色用语音条简短回应。',
+          prompt: '语音回复。请结合当前上下文，用角色口吻简短回复我，并发送语音条。',
+        },
+      ],
+      []
+    )
+    const activeTavernQuickAction = useMemo(
+      () => tavernQuickActions.find((action) => action.id === activeTavernQuickActionId) || null,
+      [activeTavernQuickActionId, tavernQuickActions]
+    )
+
+    const applyTavernQuickAction = useCallback((actionId: string) => {
+      setActiveTavernQuickActionId((current) => (current === actionId ? null : actionId))
+      window.setTimeout(() => messageInputFieldRef.current?.getElement()?.focus(), 0)
+    }, [])
+
+    const buildTavernSubmitText = useCallback(
+      (text: string) => {
+        const trimmedText = text.trim()
+        if (!activeTavernQuickAction) {
+          return text
+        }
+        return trimmedText ? `${trimmedText}\n\n${activeTavernQuickAction.prompt}` : activeTavernQuickAction.prompt
+      },
+      [activeTavernQuickAction]
+    )
+
+    const clearPressToTalkTimer = useCallback(() => {
+      if (pressToTalkTimerRef.current) {
+        window.clearTimeout(pressToTalkTimerRef.current)
+        pressToTalkTimerRef.current = null
+      }
+    }, [])
+
+    const finishPressToTalk = useCallback(
+      async (shouldSend: boolean) => {
+        clearPressToTalkTimer()
+        const wasPressToTalkActive = pressToTalkActiveRef.current
+        pressToTalkActiveRef.current = false
+        pressToTalkPointerIdRef.current = null
+        pressToTalkStartYRef.current = null
+        pressToTalkCancellingRef.current = false
+        setIsPressToTalkActive(false)
+        setIsPressToTalkCancelling(false)
+
+        if (!wasPressToTalkActive) {
+          return
+        }
+
+        suppressRecordingClickRef.current = true
+        const result = await handleStopRecording()
+        if (shouldSend && result?.audioParts.length) {
+          handleSubmitRef.current(true, {
+            audioPartsOverride: result.audioParts,
+            force: true,
+            textOverride: latestInputRef.current,
+          })
+        }
+      },
+      [clearPressToTalkTimer, handleStopRecording]
+    )
+
+    const handleRecordingPointerDown = useCallback(
+      (event: React.PointerEvent<HTMLButtonElement>) => {
+        if (
+          event.button > 0 ||
+          isRecording ||
+          isSubmitting ||
+          isCompactionRunning ||
+          generating ||
+          pressToTalkTimerRef.current
+        ) {
+          return
+        }
+
+        const target = event.currentTarget
+        pressToTalkPointerIdRef.current = event.pointerId
+        pressToTalkStartYRef.current = event.clientY
+        pressToTalkCancellingRef.current = false
+        setIsPressToTalkCancelling(false)
+        suppressRecordingClickRef.current = false
+        target.setPointerCapture?.(event.pointerId)
+        pressToTalkTimerRef.current = window.setTimeout(() => {
+          pressToTalkTimerRef.current = null
+          suppressRecordingClickRef.current = true
+          pressToTalkActiveRef.current = true
+          setIsPressToTalkActive(true)
+          void handleStartRecording().then((started) => {
+            if (!started) {
+              pressToTalkActiveRef.current = false
+              setIsPressToTalkActive(false)
+              pressToTalkPointerIdRef.current = null
+              pressToTalkStartYRef.current = null
+              pressToTalkCancellingRef.current = false
+              setIsPressToTalkCancelling(false)
+            }
+          })
+        }, 220)
+      },
+      [generating, handleStartRecording, isCompactionRunning, isRecording, isSubmitting]
+    )
+
+    const handleRecordingPointerMove = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+      if (!pressToTalkActiveRef.current || pressToTalkPointerIdRef.current !== event.pointerId) return
+      const startY = pressToTalkStartYRef.current
+      if (startY === null) return
+      const cancelling = startY - event.clientY > 56
+      if (cancelling !== pressToTalkCancellingRef.current) {
+        pressToTalkCancellingRef.current = cancelling
+        setIsPressToTalkCancelling(cancelling)
+      }
+    }, [])
+
+    const handleRecordingPointerUp = useCallback(
+      (event: React.PointerEvent<HTMLButtonElement>) => {
+        if (pressToTalkPointerIdRef.current !== event.pointerId && pressToTalkPointerIdRef.current !== null) {
+          return
+        }
+        event.currentTarget.releasePointerCapture?.(event.pointerId)
+        void finishPressToTalk(!pressToTalkCancellingRef.current)
+      },
+      [finishPressToTalk]
+    )
+
+    const handleRecordingPointerCancel = useCallback(
+      (event: React.PointerEvent<HTMLButtonElement>) => {
+        event.currentTarget.releasePointerCapture?.(event.pointerId)
+        void finishPressToTalk(false)
+      },
+      [finishPressToTalk]
+    )
+
+    const handleRecordingClick = useCallback(
+      (event: React.MouseEvent<HTMLButtonElement>) => {
+        if (suppressRecordingClickRef.current) {
+          suppressRecordingClickRef.current = false
+          event.preventDefault()
+          event.stopPropagation()
+          return
+        }
+        if (isRecording) {
+          void handleStopRecording()
+        } else {
+          void handleStartRecording()
+        }
+      },
+      [handleStartRecording, handleStopRecording, isRecording]
+    )
+
     const closeSelectModelErrorTipCb = useRef<NodeJS.Timeout>()
     const handleSubmit = async (needGenerating = true, options: SubmitOptions = {}) => {
       if (
-        disableSubmit ||
+        (disableSubmit && !options.force) ||
         generating ||
         isSubmitting ||
         isPreprocessing ||
@@ -736,10 +1090,13 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
         }
 
         // Build the message with the latest input text, bypassing debounce delay
+        const textForSubmit = buildTavernSubmitText(options.textOverride ?? latestInputRef.current)
+        const audioPartsForSubmit = options.audioPartsOverride ?? audioParts
         const latestMessage = sessionHelpers.constructUserMessage(
           preConstructedMessage.draftMessageId,
-          latestInputRef.current,
+          textForSubmit,
           pictureKeys,
+          audioPartsForSubmit,
           preprocessedFilesForSubmit,
           preConstructedMessage.preprocessedLinks
         )
@@ -761,6 +1118,7 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
               draftMessageId: undefined,
               text: '',
               pictureKeys: [],
+              audioParts: [],
               attachments: [],
               links: [],
               preprocessedFiles: [],
@@ -776,6 +1134,7 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
               message: undefined,
             })
             setShowRollbackThreadButton(false)
+            setActiveTavernQuickActionId(null)
             if (platform.type !== 'mobile' && messageTextForHistory) {
               addInputBoxHistory(messageTextForHistory)
             }
@@ -990,11 +1349,14 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
 
     const insertFiles = async (files: File[]) => {
       const MAX_IMAGES = 8
+      const MAX_AUDIO = 4
       const MAX_ATTACHMENTS = 20
       // 用本地累加器跟踪本次新增数量：同步循环内 state/ref 可能尚未刷新，靠它做无竞态的限额判断
       let imageCount = preConstructedMessageRef.current.pictureKeys?.length || 0
+      let audioCount = preConstructedMessageRef.current.audioParts?.length || 0
       let attachmentCount = preConstructedMessageRef.current.attachments?.length || 0
       let droppedImages = 0
+      let droppedAudio = 0
       let droppedAttachments = 0
 
       for (const file of files) {
@@ -1013,6 +1375,26 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
             pictureKeys: [...(prev.pictureKeys || []), key].slice(0, MAX_IMAGES), // 保留最先添加的前 8 张
           }))
           imageCount++
+        } else if (file.type.startsWith('audio/')) {
+          if (audioCount >= MAX_AUDIO) {
+            droppedAudio++
+            continue
+          }
+          const key = StorageKeyGenerator.audio('input-box')
+          const dataUrl = await readFileAsDataUrl(file)
+          await saveBlob.mutateAsync({ key, value: dataUrl })
+          setPreConstructedMessage((prev) => ({
+            ...prev,
+            audioParts: [
+              ...(prev.audioParts || []),
+              {
+                type: 'audio' as const,
+                storageKey: key,
+                mimeType: file.type || 'audio/mpeg',
+              },
+            ].slice(0, MAX_AUDIO),
+          }))
+          audioCount++
         } else {
           if (file.size > KNOWLEDGE_BASE_MAX_FILE_SIZE) {
             toastActions.add(
@@ -1093,6 +1475,9 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
         toastActions.add(
           t('You can attach up to {{limit}} images. The extra images were skipped.', { limit: MAX_IMAGES })
         )
+      }
+      if (droppedAudio > 0) {
+        toastActions.add(`最多可发送 ${MAX_AUDIO} 条语音，超出的音频已跳过。`)
       }
       if (droppedAttachments > 0) {
         toastActions.add(
@@ -1261,18 +1646,252 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
     }
 
     return (
-      <Box pt={0} pb={isSmallScreen ? 'md' : 'sm'} px="sm" id={dom.InputBoxID} {...getRootProps()}>
+      <Box
+        className="v2chat-chat-input"
+        pt={0}
+        pb={isSmallScreen ? 'md' : 'sm'}
+        px="sm"
+        id={dom.InputBoxID}
+        {...getRootProps()}
+      >
         <input className="hidden" {...getInputProps()} />
         <Stack className={cn(widthFull ? 'w-full' : 'max-w-4xl mx-auto')} gap="xs">
           {currentSessionId && <CompactionStatus sessionId={currentSessionId} />}
           <Stack
             className={cn(
-              'v2chat-input-elevated justify-between px-3 py-2',
+              'v2chat-input-elevated v2chat-chat-input__panel justify-between px-3 py-2',
               !isSmallScreen && 'min-h-[92px]'
             )}
             gap="xs"
           >
+            {!isSmallScreen && (
+              <Flex className="v2chat-chat-input__quickbar" gap={6} wrap="wrap">
+                {tavernQuickActions.map((action) => (
+                  <Tooltip key={action.id} label={action.hint} withArrow position="top">
+                    <UnstyledButton
+                      className={cn(
+                        'v2chat-chat-input__quick-action',
+                        activeTavernQuickActionId === action.id && 'is-active'
+                      )}
+                      onClick={() => applyTavernQuickAction(action.id)}
+                    >
+                      <ScalableIcon icon={action.icon} size={14} />
+                      <span>{action.label}</span>
+                    </UnstyledButton>
+                  </Tooltip>
+                ))}
+              </Flex>
+            )}
+
+            {activeTavernQuickAction && (
+              <Flex className="v2chat-chat-input__mode-hint" align="center" gap={6}>
+                <ScalableIcon icon={activeTavernQuickAction.icon} size={14} />
+                <Text span size="xs" className="v2chat-chat-input__mode-hint-text">
+                  {activeTavernQuickAction.label}
+                </Text>
+                <Text span size="xs" className="v2chat-chat-input__mode-hint-desc">
+                  {activeTavernQuickAction.hint}
+                </Text>
+                <UnstyledButton
+                  className="v2chat-chat-input__mode-clear"
+                  onClick={() => setActiveTavernQuickActionId(null)}
+                  aria-label="取消快捷模式"
+                >
+                  <ScalableIcon icon={IconX} size={13} />
+                </UnstyledButton>
+              </Flex>
+            )}
+
             {/* Input Row */}
+            {useImComposer && (
+              <Flex align="center" gap={8} className="v2chat-mobile-composer">
+                <ImageUploadInput ref={pictureInputRef} onChange={onFileInputChange} />
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  onChange={onFileInputChange}
+                  multiple
+                  accept={getFileAcceptString()}
+                />
+
+                <Menu trigger="click" position="top-start" shadow="md" keepMounted>
+                  <Menu.Target>
+                    <ActionIcon className="v2chat-mobile-composer__icon" variant="subtle" radius="xl" aria-label="更多玩法">
+                      <ScalableIcon icon={IconGridDots} size={27} />
+                    </ActionIcon>
+                  </Menu.Target>
+                  <Menu.Dropdown>
+                    {tavernQuickActions.map((action) => (
+                      <Menu.Item
+                        key={action.id}
+                        leftSection={<ScalableIcon icon={action.icon} size={16} />}
+                        rightSection={
+                          activeTavernQuickActionId === action.id ? (
+                            <Text size="xs" c="chatbox-brand">
+                              已选
+                            </Text>
+                          ) : undefined
+                        }
+                        onClick={() => applyTavernQuickAction(action.id)}
+                      >
+                        {action.label}
+                      </Menu.Item>
+                    ))}
+                    <Menu.Divider />
+                    <Menu.Item leftSection={<ScalableIcon icon={IconPlus} size={16} />} onClick={startNewThread}>
+                      {t('New Thread')}
+                    </Menu.Item>
+                    <Menu.Item
+                      leftSection={<ScalableIcon icon={IconAdjustmentsHorizontal} size={16} />}
+                      onClick={onClickSessionSettings}
+                    >
+                      {t('Conversation Settings')}
+                    </Menu.Item>
+                  </Menu.Dropdown>
+                </Menu>
+
+                <Box
+                  className={cn('v2chat-mobile-composer__field', isRecording && 'is-recording')}
+                  onClick={() => {
+                    if (!isRecording) dom.focusMessageInput()
+                  }}
+                >
+                  <Box className="v2chat-mobile-composer__input-content">
+                    <MessageInputField
+                      ref={messageInputFieldRef}
+                      isNewSession={isNewSession}
+                      isSmallScreen={isSmallScreen}
+                      viewportHeight={viewportHeight}
+                      isReadOnly={isCompactionRunning}
+                      placeholder={
+                        activeTavernQuickAction
+                          ? `${activeTavernQuickAction.label}：补一句要求...`
+                          : '发消息或按住说话...'
+                      }
+                      autoFocus={!isSmallScreen}
+                      onValueChange={onMessageInputValueChange}
+                      onUserInput={onUserInput}
+                      onKeyDown={onKeyDown}
+                      onPaste={onPaste}
+                    />
+                  </Box>
+                  {isRecording && (
+                    <Flex
+                      align="center"
+                      gap={8}
+                      className={cn('v2chat-recording-state', isPressToTalkCancelling && 'is-cancelling')}
+                    >
+                      <span className="v2chat-recording-state__dot" />
+                      <span className="v2chat-recording-state__wave" aria-hidden>
+                        {Array.from({ length: 5 }, (_, index) => (
+                          <i key={index} />
+                        ))}
+                      </span>
+                      <Text span size="sm" fw={700} className="v2chat-recording-state__text">
+                        {isPressToTalkActive
+                          ? isPressToTalkCancelling
+                            ? '松开取消'
+                            : '松开发送 · 上滑取消'
+                          : '录音中'}{' '}
+                        {formatDuration(recordingDurationMs)}
+                      </Text>
+                    </Flex>
+                  )}
+                </Box>
+
+                <Tooltip label={model ? modelSelectorDisplayText : t('Please select a model')} withArrow>
+                  <Box className="v2chat-mobile-composer__model-wrap">
+                    <ModelSelector
+                      onSelect={handleModelSelect}
+                      selectedProviderId={model?.provider}
+                      selectedModelId={model?.modelId}
+                      modelFilter={(_, providerId) => providerId === ModelProviderEnum.V2APIOpenAI}
+                      unified
+                    >
+                      <ActionIcon
+                        className={cn('v2chat-mobile-composer__icon v2chat-mobile-model-icon', !model && 'is-empty')}
+                        variant="subtle"
+                        radius="xl"
+                        aria-label="切换模型"
+                      >
+                        <ScalableIcon icon={IconBrain} size={24} />
+                      </ActionIcon>
+                    </ModelSelector>
+                  </Box>
+                </Tooltip>
+
+                <Tooltip
+                  label={
+                    isPressToTalkActive
+                      ? `松开发送 ${formatDuration(recordingDurationMs)}`
+                      : isRecording
+                        ? `停止录音 ${formatDuration(recordingDurationMs)}`
+                        : '按住说话，松开发送'
+                  }
+                  withArrow
+                >
+                  <ActionIcon
+                    disabled={!isRecording && (isSubmitting || isCompactionRunning || generating)}
+                    className={cn('v2chat-mobile-composer__icon v2chat-record-button', isPressToTalkActive && 'is-pressing')}
+                    variant="subtle"
+                    radius="xl"
+                    onPointerDown={handleRecordingPointerDown}
+                    onPointerMove={handleRecordingPointerMove}
+                    onPointerUp={handleRecordingPointerUp}
+                    onPointerCancel={handleRecordingPointerCancel}
+                    onPointerLeave={(event) => {
+                      if (!isPressToTalkActive) {
+                        clearPressToTalkTimer()
+                        pressToTalkPointerIdRef.current = null
+                        event.currentTarget.releasePointerCapture?.(event.pointerId)
+                      }
+                    }}
+                    onClick={handleRecordingClick}
+                    aria-label={isPressToTalkActive ? '松开发送语音' : isRecording ? '停止录音' : '按住说话'}
+                  >
+                    <ScalableIcon icon={isRecording ? IconPlayerStopFilled : IconMicrophone} size={24} />
+                  </ActionIcon>
+                </Tooltip>
+
+                {hasTextContent ||
+                pictureKeys.length ||
+                audioParts.length ||
+                attachments.length ||
+                links.length ||
+                generating ? (
+                  <ActionIcon
+                    disabled={
+                      (disableSubmit ||
+                        isPreprocessing ||
+                        isSubmitting ||
+                        isCompactionRunning ||
+                        hasPreprocessErrors ||
+                        hasBlockedSessionRagFiles) &&
+                      !generating
+                    }
+                    className="v2chat-mobile-composer__icon v2chat-mobile-composer__send"
+                    variant="filled"
+                    radius="xl"
+                    onClick={generating ? onStopGenerating : () => handleSubmit()}
+                    aria-label={generating ? '停止生成' : '发送'}
+                  >
+                    <ScalableIcon icon={generating ? IconPlayerStopFilled : IconArrowUp} size={22} />
+                  </ActionIcon>
+                ) : (
+                  <Box className="v2chat-mobile-composer__attachment">
+                    <AttachmentMenu
+                      onImageUploadClick={onImageUploadClick}
+                      onFileUploadClick={onFileUploadClick}
+                      handleAttachLink={handleAttachLink}
+                      t={t}
+                    />
+                  </Box>
+                )}
+              </Flex>
+            )}
+
+            {!useImComposer && (
             <Flex align="flex-end" gap={4}>
               <MessageInputField
                 ref={messageInputFieldRef}
@@ -1280,13 +1899,54 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
                 isSmallScreen={isSmallScreen}
                 viewportHeight={viewportHeight}
                 isReadOnly={isCompactionRunning}
-                placeholder={t('Type your question here...') || ''}
+                placeholder={
+                  activeTavernQuickAction
+                    ? `${activeTavernQuickAction.label}：可直接发送，也可以补充一句要求...`
+                    : isSmallScreen
+                      ? '发消息或按住说话...'
+                      : '输入台词、动作，或让角色继续剧情...'
+                }
                 autoFocus={!isSmallScreen}
                 onValueChange={onMessageInputValueChange}
                 onUserInput={onUserInput}
                 onKeyDown={onKeyDown}
                 onPaste={onPaste}
               />
+
+              <Tooltip
+                label={
+                  isPressToTalkActive
+                    ? `松开发送 ${formatDuration(recordingDurationMs)}`
+                    : isRecording
+                      ? `停止录音 ${formatDuration(recordingDurationMs)}`
+                      : '按住说话，松开发送；短按可切换录音'
+                }
+                withArrow
+              >
+                <ActionIcon
+                  disabled={!isRecording && (isSubmitting || isCompactionRunning || generating)}
+                  size={32}
+                  variant={isRecording ? 'filled' : 'subtle'}
+                  color={isRecording ? 'red' : 'chatbox-brand'}
+                  radius="xl"
+                  onPointerDown={handleRecordingPointerDown}
+                  onPointerMove={handleRecordingPointerMove}
+                  onPointerUp={handleRecordingPointerUp}
+                  onPointerCancel={handleRecordingPointerCancel}
+                  onPointerLeave={(event) => {
+                    if (!isPressToTalkActive) {
+                      clearPressToTalkTimer()
+                      pressToTalkPointerIdRef.current = null
+                      event.currentTarget.releasePointerCapture?.(event.pointerId)
+                    }
+                  }}
+                  onClick={handleRecordingClick}
+                  aria-label={isPressToTalkActive ? '松开发送语音' : isRecording ? '停止录音' : '按住说话'}
+                  className={cn('v2chat-record-button shrink-0 mb-1', isPressToTalkActive && 'is-pressing')}
+                >
+                  <ScalableIcon icon={isRecording ? IconPlayerStopFilled : IconMicrophone} size={16} />
+                </ActionIcon>
+              </Tooltip>
 
               {/* Send Button */}
               <ActionIcon
@@ -1323,7 +1983,7 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
                     isCompactionRunning ||
                     hasPreprocessErrors ||
                     hasBlockedSessionRagFiles)
-                    ? { backgroundColor: 'rgba(222, 226, 230, 1)' }
+                    ? { backgroundColor: 'rgba(255, 255, 255, 0.12)', color: 'rgba(255, 248, 251, 0.52)' }
                     : undefined
                 }
               >
@@ -1334,8 +1994,9 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
                 )}
               </ActionIcon>
             </Flex>
+            )}
 
-            {(!!pictureKeys.length || !!attachments.length || !!links.length) && (
+            {(!!pictureKeys.length || !!audioParts.length || !!attachments.length || !!links.length) && (
               <Flex
                 align="center"
                 wrap="wrap"
@@ -1406,6 +2067,32 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
                 )}
                 {pictureKeys?.map((picKey) => (
                   <ImageMiniCard key={picKey} storageKey={picKey} onDelete={() => onImageDeleteClick(picKey)} />
+                ))}
+                {audioParts?.map((part, index) => (
+                  <Flex
+                    key={part.storageKey}
+                    align="center"
+                    gap={6}
+                    className="m-1 px-2 py-1 rounded-full bg-chatbox-background-secondary border border-solid border-chatbox-border-primary"
+                  >
+                    <Text size="xs" c="chatbox-secondary">
+                      语音条 {index + 1}
+                    </Text>
+                    <ActionIcon
+                      size={18}
+                      variant="subtle"
+                      color="chatbox-tertiary"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setPreConstructedMessage((prev) => ({
+                          ...prev,
+                          audioParts: (prev.audioParts || []).filter((item) => item.storageKey !== part.storageKey),
+                        }))
+                      }}
+                    >
+                      <ScalableIcon icon={IconX} size={14} />
+                    </ActionIcon>
+                  </Flex>
                 ))}
                 {attachments?.map((file) => {
                   const fileKey = inputFileKeyByFileRef.current.get(file) ?? StorageKeyGenerator.fileUniqKey(file)
@@ -1541,7 +2228,8 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
             )}
 
             {/* Toolbar Row */}
-            <Flex align="center" gap={0} className="shrink-0 w-full" justify="space-between">
+            {!useImComposer && (
+            <Flex align="center" gap={0} className="v2chat-chat-input__toolbar shrink-0 w-full" justify="space-between">
               {/* Hidden file inputs */}
               <ImageUploadInput ref={pictureInputRef} onChange={onFileInputChange} />
               <input
@@ -1685,6 +2373,23 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
                       </UnstyledButton>
                     </Menu.Target>
                     <Menu.Dropdown>
+                      {tavernQuickActions.map((action) => (
+                        <Menu.Item
+                          key={action.id}
+                          leftSection={<ScalableIcon icon={action.icon} size={16} />}
+                          rightSection={
+                            activeTavernQuickActionId === action.id ? (
+                              <Text size="xs" c="chatbox-brand">
+                                已选
+                              </Text>
+                            ) : undefined
+                          }
+                          onClick={() => applyTavernQuickAction(action.id)}
+                        >
+                          {action.label}
+                        </Menu.Item>
+                      ))}
+                      <Menu.Divider />
                       <Menu.Item leftSection={<ScalableIcon icon={IconPlus} size={16} />} onClick={startNewThread}>
                         {t('New Thread')}
                       </Menu.Item>
@@ -1720,7 +2425,7 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
                   <Flex
                     align="center"
                     gap="2"
-                    className={`shrink-0 text-xs cursor-pointer hover:text-chatbox-tint-secondary transition-colors px-2 py-1 rounded-lg hover:bg-[var(--chatbox-background-tertiary)] ${
+                    className={`v2chat-token-pill shrink-0 text-xs cursor-pointer transition-colors px-2 py-1 rounded-lg ${
                       tokenPercentage && tokenPercentage > 80 ? 'text-red-500' : 'text-chatbox-tint-tertiary'
                     }`}
                   >
@@ -1750,7 +2455,7 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
                     withArrow
                   >
                     <ModelSelector
-                      onSelect={onSelectModel}
+                      onSelect={handleModelSelect}
                       selectedProviderId={model?.provider}
                       selectedModelId={model?.modelId}
                       position="top-end"
@@ -1758,18 +2463,19 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
                         transition: 'fade-up',
                         duration: 200,
                       }}
+                      modelFilter={(_, providerId) => providerId === ModelProviderEnum.V2APIOpenAI}
+                      unified
                     >
                       <UnstyledButton
                         className={cn(
-                          'flex min-w-0 max-w-full items-center gap-1 px-2 py-1 rounded-lg hover:bg-[var(--chatbox-background-tertiary)] transition-colors',
+                          'v2chat-model-selector-trigger flex min-w-0 max-w-full items-center gap-1 px-2 py-1 rounded-lg transition-colors',
                           !model && 'animate-pulse bg-blue-500/20'
                         )}
                       >
-                        {!!model && <ProviderImageIcon size={18} provider={model.provider} />}
                         <Text
                           size="sm"
                           className={cn(
-                            'min-w-0 flex-1 truncate text-[var(--chatbox-tint-secondary)]',
+                            'v2chat-model-selector-trigger__text min-w-0 flex-1 truncate',
                             isSmallScreen ? 'max-w-[100px]' : 'max-w-[160px]'
                           )}
                         >
@@ -1785,9 +2491,8 @@ const InputBox = forwardRef<InputBoxRef, InputBoxProps>(
                 </Box>
               </Flex>
             </Flex>
+            )}
           </Stack>
-
-          <Disclaimer />
         </Stack>
         {currentSession && (
           <CompressionModal
@@ -1979,3 +2684,34 @@ const MessageInputField = memo(
     }
   )
 )
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+}
+
+function blobToDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(blob)
+  })
+}
+
+function getPreferredRecordingMimeType() {
+  if (typeof MediaRecorder === 'undefined') return ''
+  const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']
+  return candidates.find((type) => MediaRecorder.isTypeSupported(type)) || ''
+}
+
+function formatDuration(ms: number) {
+  const seconds = Math.max(0, Math.floor(ms / 1000))
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
+}

@@ -2,4 +2,7 @@
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <external-path name="my_images" path="." />
     <cache-path name="my_cache_images" path="." />
+    <cache-path name="v2chat_updates" path="updates/" />
+    <files-path name="v2chat_backups" path="backups/" />
+    <external-cache-path name="v2chat_external_updates" path="updates/" />
 </paths>

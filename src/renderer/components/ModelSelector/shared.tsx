@@ -39,6 +39,7 @@ export const ModelItem = ({
   isSelected,
   onToggleFavorited,
   hideFavoriteIcon,
+  hideModelIcon,
 }: {
   providerId: string
   providerName?: string
@@ -47,6 +48,7 @@ export const ModelItem = ({
   isSelected?: boolean
   onToggleFavorited(): void
   hideFavoriteIcon?: boolean
+  hideModelIcon?: boolean
 }) => {
   const { t } = useTranslation()
   return (
@@ -58,7 +60,9 @@ export const ModelItem = ({
         isSelected && SELECTED_BG_CLASS
       )}
     >
-      <ModelIcon modelId={model.modelId} providerId={providerId} size={16} className="mr-xs flex-shrink-0" />
+      {!hideModelIcon && (
+        <ModelIcon modelId={model.modelId} providerId={providerId} size={16} className="mr-xs flex-shrink-0" />
+      )}
       <Text
         span
         className="flex-shrink"
@@ -138,6 +142,7 @@ export const ModelItemInDrawer = ({
   onToggleFavorited,
   onSelect,
   hideFavoriteIcon,
+  hideModelIcon,
 }: {
   providerId: string
   providerName?: string
@@ -147,6 +152,7 @@ export const ModelItemInDrawer = ({
   onToggleFavorited?(): void
   onSelect?(): void
   hideFavoriteIcon?: boolean
+  hideModelIcon?: boolean
 }) => {
   const { t } = useTranslation()
   const isRecommended = model.labels?.includes('recommended')
@@ -167,7 +173,7 @@ export const ModelItemInDrawer = ({
         onSelect?.()
       }}
     >
-      <ModelIcon modelId={model.modelId} providerId={providerId} size={20} className="flex-shrink-0" />
+      {!hideModelIcon && <ModelIcon modelId={model.modelId} providerId={providerId} size={20} className="flex-shrink-0" />}
 
       <Text span size="md" className="flex-grow-0 flex-shrink text-left overflow-hidden break-words !text-inherit">
         {model.nickname || model.modelId}

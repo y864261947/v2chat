@@ -1,177 +1,168 @@
-# V2Chat
+# V2Chat Android Client
 
-V2Chat 是一个基于 Chatbox Community Edition 改造的 V2API 专属 AI 聊天客户端。当前版本面向 Android APK 打包和本地开发，默认接入 V2API：
+V2Chat 是面向角色扮演用户的 Android AI 客户端。默认使用 V2Chat 账号与积分钱包，通过独立 `v2chat-server` 调用 NewApi 和媒体服务；高级设置仍可切换为本机 BYOK。正式客户端不包含任何供应商密钥。
 
-- 固定 API Base URL：`https://v2api.top/v1`
-- 用户只需要在应用内填写 V2API API Key
-- 支持 OpenAI / Claude / Gemini 三种协议模型配置
-- 支持文本聊天、图片发送与识别
-- 支持在用户明确要求语音回复时生成可播放语音条
+## 目录
 
-## 目录结构
+- `src/renderer`：React UI、聊天、角色、账号、积分、备份和更新状态
+- `src/shared`：消息类型、Provider 和 V2API 公共配置
+- `android`：Capacitor Android 工程与 V2Chat 原生插件
+- `scripts/generate-android-release-keystore.ps1`：首次生成正式签名
+- 同级目录 `../v2chat-server`：独立商业服务
 
-- `src/renderer`：前端界面、设置页、聊天渲染、移动端 WebView 页面
-- `src/shared`：模型 provider、类型、默认配置、V2API 公共逻辑
-- `src/main`：Electron 主进程与部分桌面/本地能力
-- `android`：Capacitor Android 工程，用于生成 APK
-- `capacitor.config.ts`：移动端应用配置
+## 开发环境
 
-## 环境要求
-
-建议使用 Windows 进行 Android 打包。本项目当前验证过的环境：
-
-- Node.js：`22.x`，要求 `>=22.12.0 <25.0.0`
-- pnpm：`10.x`，项目锁定 `pnpm@10.33.0`
-- JDK：`21`
-- Android SDK：需要 Android SDK Platform、Build Tools、Platform Tools、Command-line Tools
-- Git
-
-如果使用 Android Studio，可以通过 SDK Manager 安装：
-
-- Android SDK Platform
-- Android SDK Build-Tools
-- Android SDK Command-line Tools
-- Android SDK Platform-Tools
-
-## 首次拉取与安装依赖
+- Windows 10/11
+- Node.js `>=22.12 <26`
+- pnpm `10.17.0`
+- JDK 21
+- Android SDK Platform 35、Build Tools、Platform Tools、Command-line Tools
+- Go 1.25+（仅运行后端时需要）
 
 ```powershell
-git clone https://github.com/y864261947/v2chat.git
-cd v2chat
-
 corepack enable
-corepack prepare pnpm@10.33.0 --activate
-pnpm install
-```
+corepack pnpm@10.17.0 install
 
-## Windows 环境变量示例
-
-请按自己的安装路径调整。下面是 PowerShell 示例：
-
-```powershell
 $env:JAVA_HOME="C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot"
 $env:ANDROID_HOME="$env:LOCALAPPDATA\Android\Sdk"
-$env:ANDROID_SDK_ROOT="$env:LOCALAPPDATA\Android\Sdk"
-$env:Path="$env:JAVA_HOME\bin;$env:ANDROID_HOME\cmdline-tools\latest\bin;$env:ANDROID_HOME\platform-tools;$env:Path"
+$env:ANDROID_SDK_ROOT=$env:ANDROID_HOME
+$env:Path="$env:JAVA_HOME\bin;$env:ANDROID_HOME\platform-tools;$env:Path"
 ```
 
 检查环境：
 
 ```powershell
 node -v
-pnpm -v
+corepack pnpm@10.17.0 -v
 java -version
 adb version
 ```
 
-## 本地开发
+`zipfile` 是上游 EPUB 功能的可选旧原生模块，本项目不会在安装阶段编译它，不需要额外安装 Python。
 
-桌面开发模式：
+## 本地运行
+
+先启动业务服务：
 
 ```powershell
-pnpm dev
+cd ..\v2chat-server
+go run .\cmd\server
 ```
 
-Web 构建预览：
+再启动客户端预览：
 
 ```powershell
-pnpm run build:web
-pnpm run serve:web
+cd ..\chatbox-companion
+corepack pnpm@10.17.0 dev:web
 ```
 
-类型检查：
+本地网页会自动使用 `http://127.0.0.1:8080/v1`；正式构建使用 `https://chat.v2api.top/v1`。常用检查：
 
 ```powershell
-pnpm run check
+corepack pnpm@10.17.0 run check
+corepack pnpm@10.17.0 test
+corepack pnpm@10.17.0 run build:web
 ```
 
-## 打包 Android APK
-
-先构建前端并同步到 Android 工程：
+## Android Debug APK
 
 ```powershell
-pnpm run mobile:sync:android
-```
-
-再进入 Android 工程生成 debug APK：
-
-```powershell
+corepack pnpm@10.17.0 run mobile:sync:android
 cd android
-.\gradlew.bat assembleDebug
+.\gradlew.bat assembleProductionDebug
 ```
 
-生成文件位置：
+产物：
 
 ```text
-android/app/build/outputs/apk/debug/app-debug.apk
+android/app/build/outputs/apk/production/debug/app-production-debug.apk
 ```
 
-这个 APK 是 debug 签名包，可以直接发送到 Android 手机安装测试。正式发布前需要配置 release 签名并执行 release 打包流程。
+正式包名是 `top.v2api.v2chat`。
 
-## 一键打包命令示例
+## 旧测试包迁移
 
-在项目根目录执行：
+旧测试包名为 `com.danjoy.companion.dev`，不能直接升级为正式包。迁移步骤：
+
+1. 构建并安装 `legacyDebug`。它沿用本机 Android debug 签名，可覆盖此前由同一台开发机生成的测试 APK。
+2. 在“设置 → 账号与积分 → 本地加密备份”点击“导出备份”，设置备份密码。
+3. 安装正式 `productionRelease`，两种包可暂时共存。
+4. 在正式包点击“本地恢复”，选择 `.v2backup` 并输入同一密码。
+5. 确认角色、聊天、图片、语音、背景和附件完整后，再卸载旧测试包。
 
 ```powershell
-pnpm run mobile:sync:android
 cd android
-.\gradlew.bat assembleDebug
+.\gradlew.bat assembleLegacyDebug
 ```
 
-## 常见问题
-
-### pnpm 命令不可用
-
-先启用 Corepack：
-
-```powershell
-corepack enable
-corepack prepare pnpm@10.33.0 --activate
-```
-
-### Gradle 找不到 JDK
-
-确认 `JAVA_HOME` 指向 JDK 21，并且 `java -version` 输出为 21。
-
-### 找不到 Android SDK
-
-确认 `ANDROID_HOME` 和 `ANDROID_SDK_ROOT` 指向 Android SDK 目录，例如：
-
-```powershell
-$env:LOCALAPPDATA\Android\Sdk
-```
-
-### mobile:sync:android 构建时间很长
-
-首次构建会下载依赖和生成大量前端产物，可能需要几分钟。后续构建会使用缓存，速度会快一些。
-
-### 构建时出现 chunk size、eval、flatDir warning
-
-这些是当前依赖和构建配置产生的 warning，不影响 debug APK 生成。只要命令最终显示 `BUILD SUCCESSFUL`，APK 就已经生成。
-
-## 应用内配置
-
-安装后打开 V2Chat：
-
-1. 进入设置里的 `V2API`
-2. 填写 V2API API Key
-3. 选择协议：OpenAI、Claude 或 Gemini
-4. 刷新模型列表，选择默认聊天模型、视觉模型和 TTS 配置
-5. 回到聊天页面开始使用
-
-## 当前验证命令
-
-当前改造版本已验证：
-
-```powershell
-pnpm run check
-pnpm run mobile:sync:android
-cd android
-.\gradlew.bat assembleDebug
-```
-
-最终 APK 输出路径：
+迁移产物：
 
 ```text
-android/app/build/outputs/apk/debug/app-debug.apk
+android/app/build/outputs/apk/legacy/debug/app-legacy-debug.apk
 ```
+
+## 正式签名
+
+只在项目第一次发布时执行一次：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\generate-android-release-keystore.ps1
+```
+
+脚本会在 `../release-secrets` 生成加密 PKCS12 keystore 和凭据说明，并在 `android/keystore.properties` 写入本机配置。两处均被 Git 忽略。必须把 `release-secrets` 保存到至少两份加密离线介质；丢失后无法覆盖升级已安装的正式 APK。脚本拒绝覆盖已有签名。
+
+本工作区已经生成正式签名，不要再次运行脚本生成新身份。
+
+## 正式 Release APK
+
+每次发布必须递增 `V2CHAT_VERSION_CODE`，并设置用户可见版本名：
+
+```powershell
+$env:V2CHAT_VERSION_CODE="2"
+$env:V2CHAT_VERSION_NAME="0.1.0"
+
+corepack pnpm@10.17.0 run mobile:sync:android
+cd android
+.\gradlew.bat clean assembleProductionRelease
+```
+
+产物：
+
+```text
+android/app/build/outputs/apk/production/release/app-production-release.apk
+```
+
+发布前校验：
+
+```powershell
+apksigner verify --verbose .\app\build\outputs\apk\production\release\app-production-release.apk
+Get-FileHash .\app\build\outputs\apk\production\release\app-production-release.apk -Algorithm SHA256
+```
+
+## 应用内更新清单
+
+APK 上传到 HTTPS 下载地址后，使用离线 Ed25519 私钥签名清单：
+
+```powershell
+cd ..\..\v2chat-server
+go run .\cmd\releasectl sign `
+  --private D:\vibecoding\chatbox\release-secrets\v2chat-release-ed25519.private `
+  --version-code 2 `
+  --version-name 0.1.0 `
+  --minimum-version-code 1 `
+  --rollout 10 `
+  --apk-url https://download.v2api.top/v2chat/V2Chat-0.1.0.apk `
+  --sha256 <APK_SHA256> `
+  --size <APK_BYTES>
+```
+
+把输出的 `manifest_signature` 与完全相同的字段填入运营后台。APK 会同时验证清单 Ed25519 签名、下载大小和 APK SHA-256，然后才打开 Android 系统安装确认页。`--force` 只用于安全修复或最低版本淘汰。
+
+## 安全发布清单
+
+- `go test ./...`、`pnpm run check`、`pnpm test` 全部通过
+- `assembleProductionRelease` 使用既有正式 keystore
+- APK 字符串扫描不存在 `sk-`、`sk_`、`gsk_` 等真实供应商密钥
+- `versionCode` 高于所有已发布版本
+- 真机验证游客、邮箱、积分、图片、录音、TTS、音色、备份恢复和强制更新
+- 先 5% 灰度，观察错误率、支付差异和上游成功率，再逐步放量

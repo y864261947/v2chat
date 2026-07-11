@@ -1,14 +1,17 @@
 import NiceModal, { useModal } from '@ebay/nice-modal-react'
 import {
   ActionIcon,
+  Badge,
   Box,
   Button,
   FileButton,
   Flex,
   Input,
+  Select,
   Slider,
   Stack,
   Switch,
+  Tabs,
   Text,
   Textarea,
   Tooltip,
@@ -19,7 +22,10 @@ import {
   isChatSession,
   isPictureSession,
   ModelProviderEnum,
+  type ImageSource,
+  type MessageContentParts,
   type Session,
+  type SessionBackgroundAppearance,
   type SessionSettings,
 } from '@shared/types'
 import {
@@ -28,9 +34,19 @@ import {
   getGoogleThinkingMode,
   getSupportedGoogleThinkingLevels,
 } from '@shared/utils/google-thinking'
-import { IconInfoCircle, IconTrash, IconUpload } from '@tabler/icons-react'
+import {
+  IconAdjustments,
+  IconInfoCircle,
+  IconPhoto,
+  IconRefresh,
+  IconSparkles,
+  IconTrash,
+  IconUpload,
+  IconUser,
+  IconVolume,
+} from '@tabler/icons-react'
 import { pick } from 'lodash'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { type CSSProperties, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AdaptiveModal } from '@/components/common/AdaptiveModal'
 import { AssistantAvatar } from '@/components/common/Avatar'
@@ -42,7 +58,11 @@ import SliderWithInput from '@/components/common/SliderWithInput'
 import { handleImageInputAndSave, ImageInStorage } from '@/components/Image'
 import ImageStyleSelect from '@/components/ImageStyleSelect'
 import { useIsSmallScreen } from '@/hooks/useScreenChange'
+import { createModel } from '@/adapters'
 import { trackingEvent } from '@/packages/event'
+import { generateText } from '@/packages/model-calls'
+import { buildCharacterSystemPrompt, getTavernCharacterById, TAVERN_VOICE_OPTIONS } from '@/packages/tavernCharacters'
+import { generateSpeech } from '@/packages/v2api-tts'
 import storage from '@/storage'
 import { StorageKeyGenerator } from '@/storage/StoreStorage'
 import { updateSession } from '@/stores/chatStore'
@@ -50,6 +70,8 @@ import { getSessionMeta, mergeSettings } from '@/stores/sessionHelpers'
 import { settingsStore, useSettingsStore } from '@/stores/settingsStore'
 import { add as addToast } from '@/stores/toastActions'
 import { getMessageText } from '../../shared/utils/message'
+
+const DEFAULT_BACKGROUND_APPEARANCE: SessionBackgroundAppearance = { opacity: 0.78, dim: 0.2, blur: 2 }
 
 const SessionSettingsModal = NiceModal.create(
   ({ session, disableAutoSave = false }: { session: Session; disableAutoSave?: boolean }) => {
@@ -70,12 +92,27 @@ const SessionSettingsModal = NiceModal.create(
     }, [session])
 
     const [systemPrompt, setSystemPrompt] = useState('')
+    const [voicePreviewUrl, setVoicePreviewUrl] = useState('')
+    const [voicePreviewError, setVoicePreviewError] = useState('')
+    const [isGeneratingVoicePreview, setIsGeneratingVoicePreview] = useState(false)
+    const [isSummarizingMemory, setIsSummarizingMemory] = useState(false)
+    const [memorySummaryError, setMemorySummaryError] = useState('')
+    const linkedCharacter = useMemo(
+      () => getTavernCharacterById(editingData?.characterId),
+      [editingData?.characterId]
+    )
     useEffect(() => {
       if (!session) {
         setSystemPrompt('')
+        setVoicePreviewUrl('')
+        setVoicePreviewError('')
+        setMemorySummaryError('')
       } else {
         const systemMessage = session.messages.find((m) => m.role === 'system')
         setSystemPrompt(systemMessage ? getMessageText(systemMessage) : '')
+        setVoicePreviewUrl('')
+        setVoicePreviewError('')
+        setMemorySummaryError('')
       }
     }, [session])
 
@@ -130,28 +167,153 @@ const SessionSettingsModal = NiceModal.create(
         return
       }
 
+      const savedData = withTavernMemoryUpdatedAt(editingData, session)
+
       if (!disableAutoSave) {
-        void updateSession(editingData.id, (s) => {
+        void updateSession(savedData.id, (s) => {
           const merged = {
             ...(s ?? {}),
-            ...getSessionMeta(editingData),
-            settings: editingData.settings,
+            ...getSessionMeta(savedData),
+            settings: savedData.settings,
           } as Session
 
           return applySessionChanges(merged)
         })
       } else {
-        applySessionChanges(editingData)
+        applySessionChanges(savedData)
       }
 
       // setChatConfigDialogSessionId(null)
-      modal.resolve(editingData)
+      modal.resolve(savedData)
       modal.hide()
+    }
+
+    const onPreviewVoice = async () => {
+      if (!session || !editingData) return
+      setVoicePreviewError('')
+      setIsGeneratingVoicePreview(true)
+      try {
+        const selectedVoice = editingData.characterVoiceId || undefined
+        const text = `${editingData.name || '我'}在这里。今晚的故事，就从这一句话开始。`
+        const audio = await generateSpeech({
+          input: text,
+          sessionId: editingData.id,
+          messageId: `voice-preview-${Date.now()}`,
+          voice: selectedVoice,
+        })
+        const dataUrl = await storage.getBlob(audio.storageKey)
+        if (!dataUrl) {
+          throw new Error('试听音频保存失败')
+        }
+        setVoicePreviewUrl(dataUrl)
+      } catch (error) {
+        setVoicePreviewError(error instanceof Error ? error.message : '试听生成失败')
+      } finally {
+        setIsGeneratingVoicePreview(false)
+      }
+    }
+
+    const onSummarizeTavernMemory = async () => {
+      if (!session || !editingData) return
+      const recentMessages = buildRecentRoleplayTranscript(session)
+      if (!recentMessages) {
+        const message = '最近聊天内容太少，先多聊几句再整理剧情记忆'
+        setMemorySummaryError(message)
+        addToast(message)
+        return
+      }
+
+      setMemorySummaryError('')
+      setIsSummarizingMemory(true)
+      try {
+        const mergedSettings = mergeSettings(settingsStore.getState().getSettings(), editingData.settings, editingData.type)
+        const model = await createModel(mergedSettings)
+        const result = await generateText(model, [
+          createMessage(
+            'system',
+            [
+              'You summarize tavern roleplay continuity for V2Chat.',
+              'Return only compact JSON with these string fields: relationship, currentScene, memory.',
+              'relationship: user-character relationship, forms of address, boundaries, agreements, emotional state.',
+              'currentScene: current place, time, atmosphere, and immediate situation.',
+              'memory: important events, clues, promises, user preferences, unresolved plot hooks.',
+              'Write in Simplified Chinese. Keep each field concise and useful for future roleplay.',
+              'Do not invent facts that are not supported by the conversation.',
+            ].join('\n')
+          ),
+          createMessage(
+            'user',
+            [
+              `角色名称：${editingData.name || session.name}`,
+              editingData.characterDescription ? `角色描述：${editingData.characterDescription}` : '',
+              editingData.characterRelationship ? `已有关系笔记：${editingData.characterRelationship}` : '',
+              editingData.currentScene ? `已有当前场景：${editingData.currentScene}` : '',
+              editingData.characterMemory ? `已有长期记忆：${editingData.characterMemory}` : '',
+              `最近聊天：\n${recentMessages}`,
+              '请输出 JSON，不要输出解释。',
+            ]
+              .filter(Boolean)
+              .join('\n\n')
+          ),
+        ])
+        const summary = parseTavernMemorySummary(getTextFromMessageParts(result.contentParts))
+        setEditingData({
+          ...editingData,
+          characterRelationship: summary.relationship || editingData.characterRelationship,
+          currentScene: summary.currentScene || editingData.currentScene,
+          characterMemory: summary.memory || editingData.characterMemory,
+          characterMemoryUpdatedAt: Date.now(),
+        })
+        addToast('已整理剧情记忆，保存后生效')
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '剧情记忆整理失败'
+        setMemorySummaryError(message)
+        addToast(message)
+      } finally {
+        setIsSummarizingMemory(false)
+      }
+    }
+
+    const onSyncFromCharacterLibrary = () => {
+      if (!editingData || !linkedCharacter) return
+      const avatarPatch =
+        linkedCharacter.avatar?.type === 'storage-key'
+          ? { assistantAvatarKey: linkedCharacter.avatar.storageKey, picUrl: undefined }
+          : linkedCharacter.avatar?.type === 'url'
+            ? { assistantAvatarKey: undefined, picUrl: linkedCharacter.avatar.url }
+            : { assistantAvatarKey: undefined, picUrl: undefined }
+
+      setEditingData({
+        ...editingData,
+        ...avatarPatch,
+        conversationMode: 'roleplay',
+        name: linkedCharacter.name,
+        characterId: linkedCharacter.id,
+        characterDescription: linkedCharacter.description,
+        characterTags: linkedCharacter.tags,
+        characterVoiceId: linkedCharacter.voiceId,
+        backgroundImage: linkedCharacter.backgroundImage,
+        standingImage: linkedCharacter.standingImage,
+      })
+      setSystemPrompt(
+        buildCharacterSystemPrompt(linkedCharacter, {
+          relationship: editingData.characterRelationship,
+          memory: editingData.characterMemory,
+          currentScene: editingData.currentScene,
+        })
+      )
+      setVoicePreviewUrl('')
+      setVoicePreviewError('')
+      addToast('已同步角色库内容，保存后生效')
     }
 
     if (!session || !editingData) {
       return null
     }
+
+    const characterSummary =
+      getSessionSettingsSummary(editingData.characterDescription, editingData.name) ||
+      '整理角色资料、聊天背景、立绘和专属音色。'
 
     return (
       <AdaptiveModal
@@ -163,13 +325,13 @@ const SessionSettingsModal = NiceModal.create(
         // fullScreen={isSmallScreen}
         centered
         size="lg"
-        title={t('Conversation Settings')}
+        title="当前窗口：角色与场景"
         onFocus={(e) => e.stopPropagation()}
         trapFocus={false}
         // fullWidth
       >
-        <div style={{ maxHeight: '60vh', overflowY: 'auto', overflowX: 'hidden' }}>
-          <Stack>
+        <div className="v2chat-session-settings">
+          <Flex className="v2chat-session-settings__hero" align="center" gap="md">
             <FileButton
               accept="image/png,image/jpeg"
               onChange={(file) => {
@@ -185,181 +347,464 @@ const SessionSettingsModal = NiceModal.create(
               }}
             >
               {(props) => (
-                <Flex justify="center">
-                  <Flex className="relative">
-                    <AssistantAvatar
-                      size={isSmallScreen ? 64 : 80}
-                      avatarKey={editingData.assistantAvatarKey}
-                      picUrl={editingData.picUrl}
-                      sessionType={editingData.type}
-                      {...props}
-                    />
+                <Flex className="v2chat-session-settings__avatar">
+                  <AssistantAvatar
+                    size={isSmallScreen ? 64 : 76}
+                    avatarKey={editingData.assistantAvatarKey}
+                    picUrl={editingData.picUrl}
+                    sessionType={editingData.type}
+                    {...props}
+                  />
 
-                    {editingData.assistantAvatarKey && (
-                      <ActionIcon
-                        color="chatbox-error"
-                        size={24}
-                        radius="xl"
-                        bottom={0}
-                        right={0}
-                        className="absolute"
-                        onClick={() => {
-                          setEditingData({ ...editingData, assistantAvatarKey: undefined })
-                        }}
-                      >
-                        <ScalableIcon icon={IconTrash} size={18} />
-                      </ActionIcon>
-                    )}
-                  </Flex>
+                  {editingData.assistantAvatarKey && (
+                    <ActionIcon
+                      color="chatbox-error"
+                      size={24}
+                      radius="xl"
+                      bottom={0}
+                      right={0}
+                      className="absolute"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setEditingData({ ...editingData, assistantAvatarKey: undefined })
+                      }}
+                      aria-label="移除头像"
+                    >
+                      <ScalableIcon icon={IconTrash} size={18} />
+                    </ActionIcon>
+                  )}
                 </Flex>
               )}
             </FileButton>
 
-            <Stack gap="xs">
-              <Text fw={700}>{t('Name')}</Text>
-              <Input
-                placeholder={t('Name')}
-                autoFocus={!isSmallScreen}
-                value={editingData.name}
-                onChange={(e) => setEditingData({ ...editingData, name: e.target.value })}
-                classNames={{
-                  input: '!text-chatbox-tint-primary',
-                }}
-              />
+            <Stack gap={8} className="min-w-0 flex-1">
+              <Flex gap={8} align="center" wrap="wrap">
+                <Text fw={800} size="lg" lineClamp={1}>
+                  {editingData.name || '未命名角色'}
+                </Text>
+                {editingData.characterTags?.slice(0, 3).map((tag) => (
+                  <Badge key={tag} variant="light" color="chatbox-brand" radius="sm">
+                    {tag}
+                  </Badge>
+                ))}
+              </Flex>
+              <Text size="sm" opacity={0.68} lineClamp={1}>
+                {characterSummary}
+              </Text>
             </Stack>
+          </Flex>
 
-            <Textarea
-              label={t('Instruction (System Prompt)')}
-              placeholder={t('Copilot Prompt Demo') || ''}
-              autosize
-              minRows={2}
-              maxRows={12}
-              value={systemPrompt}
-              onChange={(event) => setSystemPrompt(event.target.value)}
-              classNames={{
-                input: '!text-chatbox-tint-primary',
-              }}
-              styles={{
-                input: { touchAction: 'manipulation' },
-              }}
-            />
-
-            <Stack gap="xs">
-              <Flex align="center" justify="space-between">
-                <Text fw={700}>{t('Specific model settings')}</Text>
-                <Button size="compact-sm" color="chatbox-brand" variant="transparent" onClick={onReset} fw={600}>
-                  {t('Reset')}
+          {editingData.characterId && (
+            <Box className="v2chat-session-settings__sync-card">
+              <Flex align="center" justify="space-between" gap="sm" wrap="wrap">
+                <Stack gap={2} className="min-w-0">
+                  <Text fw={800} size="sm">
+                    角色库同步
+                  </Text>
+                  <Text size="xs" opacity={0.7}>
+                    {linkedCharacter
+                      ? `已绑定角色库：${linkedCharacter.name}。可同步名称、设定、标签、头像、背景、立绘和音色。`
+                      : '角色库中找不到这张角色卡，当前聊天会保留已有设定。'}
+                  </Text>
+                </Stack>
+                <Button
+                  size="compact-sm"
+                  variant="light"
+                  color="chatbox-brand"
+                  disabled={!linkedCharacter}
+                  leftSection={<IconRefresh size={14} />}
+                  onClick={onSyncFromCharacterLibrary}
+                >
+                  从角色库同步
                 </Button>
               </Flex>
+            </Box>
+          )}
 
-              <Box p="sm" className="border border-solid border-chatbox-border-primary rounded-md">
-                {isChatSession(session) && (
-                  <ChatConfig
-                    settings={editingData.settings}
-                    onSettingsChange={(d) =>
-                      setEditingData((_data) => {
-                        if (_data) {
-                          return {
-                            ..._data,
-                            settings: {
-                              ..._data?.settings,
-                              ...d,
-                            },
-                          }
-                        } else {
-                          return null
-                        }
+          <Tabs defaultValue="profile" className="v2chat-session-settings__tabs">
+            <Tabs.List grow>
+              <Tabs.Tab value="profile" leftSection={<IconUser size={15} />}>
+                角色资料
+              </Tabs.Tab>
+              <Tabs.Tab value="scene" leftSection={<IconPhoto size={15} />}>
+                场景外观
+              </Tabs.Tab>
+              <Tabs.Tab value="voice" leftSection={<IconVolume size={15} />}>
+                语音
+              </Tabs.Tab>
+              <Tabs.Tab value="advanced" leftSection={<IconAdjustments size={15} />}>
+                高级
+              </Tabs.Tab>
+            </Tabs.List>
+
+            <Tabs.Panel value="profile" pt="md">
+              <Stack gap="md">
+                <Stack gap="xs">
+                  <Text fw={700}>角色名称</Text>
+                  <Input
+                    placeholder="输入角色名称"
+                    autoFocus={!isSmallScreen}
+                    value={editingData.name}
+                    onChange={(e) => setEditingData({ ...editingData, name: e.target.value })}
+                    classNames={{
+                      input: '!text-chatbox-tint-primary',
+                    }}
+                  />
+                </Stack>
+
+                <Textarea
+                  label="角色描述"
+                  description="用于角色库卡片、右侧立绘说明，也会辅助生成图片与语音风格。"
+                  placeholder="写下角色身份、性格、关系、外貌或当前设定。"
+                  autosize
+                  minRows={4}
+                  maxRows={10}
+                  value={editingData.characterDescription || ''}
+                  onChange={(event) => setEditingData({ ...editingData, characterDescription: event.target.value })}
+                  classNames={{
+                    input: '!text-chatbox-tint-primary',
+                  }}
+                />
+
+                <Box className="v2chat-session-settings__memory-card">
+                  <Flex align="center" justify="space-between" gap="sm" wrap="wrap">
+                    <Stack gap={2} className="min-w-0">
+                      <Text fw={800} size="sm">
+                        剧情记忆
+                      </Text>
+                      <Text size="xs" opacity={0.7}>
+                        从最近聊天提炼关系、场景和伏笔，先填入下方表单，保存后用于后续回复。
+                      </Text>
+                    </Stack>
+                    <Button
+                      size="compact-sm"
+                      variant="light"
+                      color="chatbox-brand"
+                      leftSection={<IconSparkles size={14} />}
+                      loading={isSummarizingMemory}
+                      onClick={() => void onSummarizeTavernMemory()}
+                    >
+                      整理剧情记忆
+                    </Button>
+                  </Flex>
+                  {memorySummaryError && (
+                    <Text size="xs" c="red" mt={6}>
+                      {memorySummaryError}
+                    </Text>
+                  )}
+                </Box>
+
+                <Textarea
+                  label="关系笔记"
+                  description="记录用户与角色的关系、称呼、亲密度、约定和禁忌，只影响当前聊天。"
+                  placeholder="例如：用户是角色的旧友；角色习惯称呼用户为旅人；不要主动跳过剧情。"
+                  autosize
+                  minRows={3}
+                  maxRows={8}
+                  value={editingData.characterRelationship || ''}
+                  onChange={(event) => setEditingData({ ...editingData, characterRelationship: event.target.value })}
+                  classNames={{
+                    input: '!text-chatbox-tint-primary',
+                  }}
+                />
+
+                <Textarea
+                  label="当前场景"
+                  description="给模型一个稳定的当前地点、时间、氛围和正在发生的事。"
+                  placeholder="例如：深夜酒馆二楼，窗外下雨，两人刚谈到失踪的委托人。"
+                  autosize
+                  minRows={2}
+                  maxRows={6}
+                  value={editingData.currentScene || ''}
+                  onChange={(event) => setEditingData({ ...editingData, currentScene: event.target.value })}
+                  classNames={{
+                    input: '!text-chatbox-tint-primary',
+                  }}
+                />
+
+                <Textarea
+                  label="长期记忆"
+                  description="放关键伏笔、已发生事件和角色需要记住的偏好。建议短句分行。"
+                  placeholder="例如：用户不喜欢太长回复；角色知道钥匙藏在壁炉后；上次剧情停在码头。"
+                  autosize
+                  minRows={3}
+                  maxRows={10}
+                  value={editingData.characterMemory || ''}
+                  onChange={(event) => setEditingData({ ...editingData, characterMemory: event.target.value })}
+                  classNames={{
+                    input: '!text-chatbox-tint-primary',
+                  }}
+                />
+
+                <Input.Wrapper label="标签" description="用逗号分隔，例如：校园, NSFW, 甜虐">
+                  <Input
+                    placeholder="校园, 剧情, 女性"
+                    value={(editingData.characterTags || []).join(', ')}
+                    onChange={(event) =>
+                      setEditingData({
+                        ...editingData,
+                        characterTags: event.target.value
+                          .split(/[,，]/)
+                          .map((tag) => tag.trim())
+                          .filter(Boolean),
                       })
                     }
+                    classNames={{
+                      input: '!text-chatbox-tint-primary',
+                    }}
                   />
-                )}
-                {isPictureSession(session) && <PictureConfig dataEdit={editingData} setDataEdit={setEditingData} />}
-              </Box>
-            </Stack>
+                </Input.Wrapper>
+              </Stack>
+            </Tabs.Panel>
 
-            <Stack gap="xs">
-              <Text fw={600}>{t('Background Settings')}</Text>
-              <Flex
-                align="center"
-                gap="sm"
-                wrap="wrap"
-                className="p-sm border border-solid border-chatbox-border-primary rounded-md"
-              >
-                <Flex align="center" gap="xxs">
-                  <Text>{t('Background Image')}</Text>
-                  <Tooltip
-                    label={t('Support jpg or png file smaller than 5MB. Overrides global background when set.')}
-                    withArrow
-                    offset={4}
-                  >
-                    <ScalableIcon icon={IconInfoCircle} size={20} className="text-chatbox-tint-tertiary" />
-                  </Tooltip>
-                </Flex>
-
-                <div className="flex-1" />
-
-                <FileButton
+            <Tabs.Panel value="scene" pt="md">
+              <Stack gap="md">
+                <SessionImageSlot
+                  title="聊天背景"
+                  description="绑定到当前角色会话，聊天时作为背景显示。支持 JPG/PNG，建议横图。"
+                  source={editingData.backgroundImage}
+                  appearance={editingData.backgroundAppearance || DEFAULT_BACKGROUND_APPEARANCE}
+                  previewClassName="v2chat-session-settings__image-preview--wide"
                   accept="image/png,image/jpeg"
-                  onChange={(file) => {
-                    if (file) {
-                      if (file.size > 5 * 1024 * 1024) {
-                        addToast(t('Support jpg or png file smaller than 5MB'))
-                        return
-                      }
-                      const key = StorageKeyGenerator.picture(`session-bg:${session.id}`)
-                      handleImageInputAndSave(
-                        file,
-                        key,
-                        () =>
-                          setEditingData({ ...editingData, backgroundImage: { type: 'storage-key', storageKey: key } }),
-                        (k, v) => storage.setBlob(k, v)
-                      )
+                  uploadLabel="上传"
+                  onUpload={(file) => {
+                    if (file.size > 5 * 1024 * 1024) {
+                      addToast(t('Support jpg or png file smaller than 5MB'))
+                      return
                     }
+                    const key = StorageKeyGenerator.picture(`session-bg:${session.id}`)
+                    handleImageInputAndSave(
+                      file,
+                      key,
+                      () => setEditingData({ ...editingData, backgroundImage: { type: 'storage-key', storageKey: key } }),
+                      (k, v) => storage.setBlob(k, v)
+                    )
                   }}
-                >
-                  {(props) => (
-                    <Button {...props} variant="default" size="compact-sm">
-                      <ScalableIcon icon={IconUpload} size={12} className="mr-xs" />
-                      {t('Upload')}
-                    </Button>
-                  )}
-                </FileButton>
+                  onRemove={() => {
+                    removeImageSource(editingData.backgroundImage)
+                    setEditingData({ ...editingData, backgroundImage: undefined })
+                  }}
+                />
 
-                {editingData.backgroundImage?.type === 'storage-key' ? (
-                  <Box w={48} h={48} className="relative overflow-hidden rounded bg-chatbox-tertiary/20 flex-shrink-0">
-                    <ImageInStorage
-                      storageKey={editingData.backgroundImage.storageKey}
-                      className="object-cover w-full h-full"
+                {editingData.backgroundImage && (
+                  <Box className="v2chat-session-settings__background-controls">
+                    <Stack gap="md">
+                      <BackgroundAppearanceSlider
+                        label="背景强度"
+                        value={Math.round((editingData.backgroundAppearance?.opacity ?? DEFAULT_BACKGROUND_APPEARANCE.opacity) * 100)}
+                        min={20}
+                        max={100}
+                        suffix="%"
+                        onChange={(value) =>
+                          setEditingData({
+                            ...editingData,
+                            backgroundAppearance: {
+                              ...(editingData.backgroundAppearance || DEFAULT_BACKGROUND_APPEARANCE),
+                              opacity: value / 100,
+                            },
+                          })
+                        }
+                      />
+                      <BackgroundAppearanceSlider
+                        label="暗化遮罩"
+                        value={Math.round((editingData.backgroundAppearance?.dim ?? DEFAULT_BACKGROUND_APPEARANCE.dim) * 100)}
+                        min={0}
+                        max={70}
+                        suffix="%"
+                        onChange={(value) =>
+                          setEditingData({
+                            ...editingData,
+                            backgroundAppearance: {
+                              ...(editingData.backgroundAppearance || DEFAULT_BACKGROUND_APPEARANCE),
+                              dim: value / 100,
+                            },
+                          })
+                        }
+                      />
+                      <BackgroundAppearanceSlider
+                        label="背景模糊"
+                        value={editingData.backgroundAppearance?.blur ?? DEFAULT_BACKGROUND_APPEARANCE.blur}
+                        min={0}
+                        max={16}
+                        suffix="px"
+                        onChange={(value) =>
+                          setEditingData({
+                            ...editingData,
+                            backgroundAppearance: {
+                              ...(editingData.backgroundAppearance || DEFAULT_BACKGROUND_APPEARANCE),
+                              blur: value,
+                            },
+                          })
+                        }
+                      />
+                    </Stack>
+                  </Box>
+                )}
+
+                <SessionImageSlot
+                  title="角色立绘"
+                  description="显示在聊天右侧和沉浸模式里。推荐透明 PNG，后续可接 Live2D。"
+                  source={editingData.standingImage}
+                  previewClassName="v2chat-session-settings__image-preview--standing"
+                  accept="image/png,image/jpeg,image/webp"
+                  uploadLabel="上传"
+                  onUpload={(file) => {
+                    if (file.size > 8 * 1024 * 1024) {
+                      addToast('图片不能超过 8MB')
+                      return
+                    }
+                    const key = StorageKeyGenerator.picture(`session-standing:${session.id}`)
+                    handleImageInputAndSave(
+                      file,
+                      key,
+                      () => setEditingData({ ...editingData, standingImage: { type: 'storage-key', storageKey: key } }),
+                      (k, v) => storage.setBlob(k, v)
+                    )
+                  }}
+                  onRemove={() => {
+                    removeImageSource(editingData.standingImage)
+                    setEditingData({ ...editingData, standingImage: undefined })
+                  }}
+                />
+              </Stack>
+            </Tabs.Panel>
+
+            <Tabs.Panel value="voice" pt="md">
+              <Stack gap="md">
+                {isChatSession(session) && (
+                  <>
+                    <Select
+                      label="角色音色"
+                      description="本会话生成语音条时优先使用此音色；清空后跟随全局 TTS 设置。"
+                      placeholder="跟随全局设置"
+                      clearable
+                      searchable
+                      leftSection={<IconVolume size={16} />}
+                      data={[
+                        ...(editingData.characterVoiceId &&
+                        !TAVERN_VOICE_OPTIONS.some((item) => item.value === editingData.characterVoiceId)
+                          ? [
+                              {
+                                value: editingData.characterVoiceId,
+                                label: `自定义音色 (${editingData.characterVoiceId})`,
+                              },
+                            ]
+                          : []),
+                        ...TAVERN_VOICE_OPTIONS,
+                      ]}
+                      value={editingData.characterVoiceId || null}
+                      onChange={(value) => {
+                        setVoicePreviewUrl('')
+                        setVoicePreviewError('')
+                        setEditingData({ ...editingData, characterVoiceId: value || undefined })
+                      }}
+                      classNames={{
+                        input: '!text-chatbox-tint-primary',
+                      }}
                     />
 
-                    <ActionIcon
-                      color="chatbox-error"
-                      size={20}
-                      radius={10}
-                      bottom={3}
-                      right={3}
-                      className="absolute"
-                      onClick={() => {
-                        if (editingData.backgroundImage) {
-                          if (editingData.backgroundImage.type === 'storage-key') {
-                            storage.removeItem(editingData.backgroundImage.storageKey)
-                          }
-                          setEditingData({ ...editingData, backgroundImage: undefined })
+                    <Box className="v2chat-session-settings__voice-preview">
+                      <Flex align="center" justify="space-between" gap="sm" wrap="wrap">
+                        <Stack gap={2} className="min-w-0">
+                          <Text fw={800} size="sm">
+                            试听角色音色
+                          </Text>
+                          <Text size="xs" opacity={0.68}>
+                            用当前音色生成一句短台词，确认声音是否适合这个角色。
+                          </Text>
+                        </Stack>
+                        <Button
+                          size="compact-sm"
+                          variant="light"
+                          color="chatbox-brand"
+                          leftSection={<IconVolume size={14} />}
+                          loading={isGeneratingVoicePreview}
+                          onClick={() => void onPreviewVoice()}
+                        >
+                          生成试听
+                        </Button>
+                      </Flex>
+                      {voicePreviewUrl && (
+                        <audio controls src={voicePreviewUrl} className="v2chat-session-settings__voice-player" />
+                      )}
+                      {voicePreviewError && (
+                        <Text size="xs" c="red" mt={6}>
+                          {voicePreviewError}
+                        </Text>
+                      )}
+                    </Box>
+                  </>
+                )}
+
+                <Box className="v2chat-session-settings__note">
+                  <Text fw={700} size="sm">
+                    对话中怎么触发？
+                  </Text>
+                  <Text size="sm" opacity={0.72}>
+                    用户说“用语音回答我”“读出来”“发语音”等请求时，V2Chat 会把 AI 的简短回复转成语音条。
+                  </Text>
+                </Box>
+              </Stack>
+            </Tabs.Panel>
+
+            <Tabs.Panel value="advanced" pt="md">
+              <Stack gap="md">
+                <Textarea
+                  label="角色设定提示词"
+                  placeholder={t('Copilot Prompt Demo') || ''}
+                  autosize
+                  minRows={3}
+                  maxRows={12}
+                  value={systemPrompt}
+                  onChange={(event) => setSystemPrompt(event.target.value)}
+                  classNames={{
+                    input: '!text-chatbox-tint-primary',
+                  }}
+                  styles={{
+                    input: { touchAction: 'manipulation' },
+                  }}
+                />
+
+                <Stack gap="xs">
+                  <Flex align="center" justify="space-between">
+                    <Text fw={700}>模型参数</Text>
+                    <Button size="compact-sm" color="chatbox-brand" variant="transparent" onClick={onReset} fw={600}>
+                      重置
+                    </Button>
+                  </Flex>
+
+                  <Box p="sm" className="border border-solid border-chatbox-border-primary rounded-md">
+                    {isChatSession(session) && (
+                      <ChatConfig
+                        settings={editingData.settings}
+                        onSettingsChange={(d) =>
+                          setEditingData((_data) => {
+                            if (_data) {
+                              return {
+                                ..._data,
+                                settings: {
+                                  ..._data?.settings,
+                                  ...d,
+                                },
+                              }
+                            } else {
+                              return null
+                            }
+                          })
                         }
-                      }}
-                    >
-                      <ScalableIcon icon={IconTrash} size={16} />
-                    </ActionIcon>
+                      />
+                    )}
+                    {isPictureSession(session) && <PictureConfig dataEdit={editingData} setDataEdit={setEditingData} />}
                   </Box>
-                ) : null}
-              </Flex>
-            </Stack>
-          </Stack>
+                </Stack>
+              </Stack>
+            </Tabs.Panel>
+          </Tabs>
         </div>
 
         <AdaptiveModal.Actions>
-          <AdaptiveModal.CloseButton onClick={onCancel} />
-          <Button onClick={onSave}>{t('Save')}</Button>
+          <AdaptiveModal.CloseButton onClick={onCancel}>取消</AdaptiveModal.CloseButton>
+          <Button onClick={onSave}>保存</Button>
         </AdaptiveModal.Actions>
       </AdaptiveModal>
     )
@@ -367,6 +812,235 @@ const SessionSettingsModal = NiceModal.create(
 )
 
 export default SessionSettingsModal
+
+function getSessionSettingsSummary(description?: string, characterName?: string) {
+  if (!description) return ''
+
+  const name = characterName?.trim() || '角色'
+  const normalized = description
+    .replace(/<\{\{char\}\}>/gi, ' ')
+    .replace(/\{\{char\}\}/gi, name)
+    .replace(/\{\{user\}\}/gi, '用户')
+    .replace(/^#+\s.*$/gm, ' ')
+    .replace(/^---+$/gm, ' ')
+    .replace(/^[-*]\s+/gm, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (!normalized) return ''
+  return normalized.length > 96 ? `${normalized.slice(0, 96)}...` : normalized
+}
+
+type TavernMemorySummary = {
+  relationship?: string
+  currentScene?: string
+  memory?: string
+}
+
+function buildRecentRoleplayTranscript(session: Session) {
+  const messages = (session.messages || [])
+    .filter((message) => message.role === 'user' || message.role === 'assistant')
+    .slice(-24)
+    .map((message) => {
+      const role = message.role === 'user' ? '用户' : '角色'
+      const text = getMessageText(message, false, false).replace(/\s+/g, ' ').trim()
+      if (!text) return ''
+      return `${role}: ${text.length > 900 ? `${text.slice(0, 900)}...` : text}`
+    })
+    .filter(Boolean)
+
+  if (messages.length < 2) return ''
+  const transcript = messages.join('\n')
+  return transcript.length > 9000 ? transcript.slice(-9000) : transcript
+}
+
+function getTextFromMessageParts(parts: MessageContentParts) {
+  return parts
+    .map((part) => (part.type === 'text' ? part.text : ''))
+    .join('\n')
+    .trim()
+}
+
+function parseTavernMemorySummary(rawText: string): TavernMemorySummary {
+  const cleaned = rawText
+    .replace(/^```(?:json)?/i, '')
+    .replace(/```$/i, '')
+    .trim()
+  const jsonText = cleaned.match(/\{[\s\S]*\}/)?.[0] || cleaned
+
+  let parsed: Record<string, unknown>
+  try {
+    parsed = JSON.parse(jsonText) as Record<string, unknown>
+  } catch {
+    throw new Error('模型没有返回可识别的剧情记忆 JSON')
+  }
+
+  const relationship = pickSummaryField(parsed, ['relationship', 'relationshipNotes', '关系笔记', '关系'])
+  const currentScene = pickSummaryField(parsed, ['currentScene', 'scene', '当前场景', '场景'])
+  const memory = pickSummaryField(parsed, ['memory', 'longTermMemory', '长期记忆', '记忆'])
+
+  if (!relationship && !currentScene && !memory) {
+    throw new Error('没有提炼到可用的剧情记忆')
+  }
+
+  return { relationship, currentScene, memory }
+}
+
+function pickSummaryField(source: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = source[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+    if (Array.isArray(value)) {
+      const text = value
+        .filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
+        .map((item) => item.trim())
+        .join('\n')
+      if (text) return text
+    }
+  }
+  return ''
+}
+
+function withTavernMemoryUpdatedAt(editingData: Session, originalSession: Session): Session {
+  const hasMemory = [editingData.characterRelationship, editingData.currentScene, editingData.characterMemory].some(
+    (value) => Boolean(value?.trim())
+  )
+  if (!hasMemory) {
+    return { ...editingData, characterMemoryUpdatedAt: undefined }
+  }
+
+  const memoryChanged =
+    normalizeMemoryField(editingData.characterRelationship) !== normalizeMemoryField(originalSession.characterRelationship) ||
+    normalizeMemoryField(editingData.currentScene) !== normalizeMemoryField(originalSession.currentScene) ||
+    normalizeMemoryField(editingData.characterMemory) !== normalizeMemoryField(originalSession.characterMemory)
+
+  if (!memoryChanged && editingData.characterMemoryUpdatedAt) {
+    return editingData
+  }
+
+  return {
+    ...editingData,
+    characterMemoryUpdatedAt: Date.now(),
+  }
+}
+
+function normalizeMemoryField(value?: string) {
+  return value?.replace(/\s+/g, ' ').trim() || ''
+}
+
+function removeImageSource(source?: ImageSource) {
+  if (source?.type === 'storage-key') {
+    storage.removeItem(source.storageKey)
+  }
+}
+
+function SessionImageSlot({
+  title,
+  description,
+  source,
+  appearance,
+  previewClassName,
+  accept,
+  uploadLabel,
+  onUpload,
+  onRemove,
+}: {
+  title: string
+  description: string
+  source?: ImageSource
+  appearance?: SessionBackgroundAppearance
+  previewClassName: string
+  accept: string
+  uploadLabel: string
+  onUpload: (file: File) => void
+  onRemove: () => void
+}) {
+  const previewStyle = appearance
+    ? ({
+        '--v2chat-preview-opacity': appearance.opacity,
+        '--v2chat-preview-dim': appearance.dim,
+        '--v2chat-preview-blur': `${appearance.blur}px`,
+      } as CSSProperties)
+    : undefined
+  return (
+    <Box className="v2chat-session-settings__image-slot">
+      <Flex align="flex-start" justify="space-between" gap="sm" wrap="wrap">
+        <Stack gap={2} className="min-w-0">
+          <Text fw={800} size="sm">
+            {title}
+          </Text>
+          <Text size="xs" opacity={0.68}>
+            {description}
+          </Text>
+        </Stack>
+
+        <Flex gap="xs">
+          <FileButton accept={accept} onChange={(file) => file && onUpload(file)}>
+            {(props) => (
+              <Button {...props} variant="default" size="compact-sm">
+                <ScalableIcon icon={IconUpload} size={12} className="mr-xs" />
+                {uploadLabel}
+              </Button>
+            )}
+          </FileButton>
+          {source && (
+            <Button color="chatbox-error" variant="subtle" size="compact-sm" onClick={onRemove}>
+              移除
+            </Button>
+          )}
+        </Flex>
+      </Flex>
+
+      <div
+        className={`v2chat-session-settings__image-preview ${previewClassName}${appearance ? ' is-background' : ''}`}
+        style={previewStyle}
+      >
+        {source?.type === 'storage-key' ? (
+          <ImageInStorage storageKey={source.storageKey} className="v2chat-session-settings__image" />
+        ) : source?.type === 'url' ? (
+          <img src={source.url} alt="" className="v2chat-session-settings__image" />
+        ) : (
+          <div className="v2chat-session-settings__image-empty">
+            <IconPhoto size={22} />
+            <span>尚未绑定图片</span>
+          </div>
+        )}
+        {appearance && source && <div className="v2chat-session-settings__image-scrim" />}
+      </div>
+    </Box>
+  )
+}
+
+function BackgroundAppearanceSlider({
+  label,
+  value,
+  min,
+  max,
+  suffix,
+  onChange,
+}: {
+  label: string
+  value: number
+  min: number
+  max: number
+  suffix: string
+  onChange: (value: number) => void
+}) {
+  return (
+    <Stack gap={5}>
+      <Flex align="center" justify="space-between" gap="sm">
+        <Text size="xs" fw={700}>
+          {label}
+        </Text>
+        <Text size="xs" c="chatbox-tertiary">
+          {value}
+          {suffix}
+        </Text>
+      </Flex>
+      <Slider aria-label={label} value={value} min={min} max={max} step={1} label={null} onChange={onChange} />
+    </Stack>
+  )
+}
 
 interface ThinkingBudgetConfigProps {
   currentBudgetTokens: number

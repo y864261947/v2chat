@@ -11,12 +11,13 @@ import {
   useCombobox,
 } from '@mantine/core'
 import type { ProviderModelInfo } from '@shared/types'
-import { IconSearch } from '@tabler/icons-react'
+import { IconRefresh, IconSearch } from '@tabler/icons-react'
 import clsx from 'clsx'
 import { useAtom } from 'jotai'
 import { cloneElement, forwardRef, isValidElement, type MouseEvent, type ReactElement, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useProviders } from '@/hooks/useProviders'
+import { useV2APIModelRefresh } from '@/hooks/useV2APIModelRefresh'
 import { navigateToSettings } from '@/modals/Settings'
 import { collapsedProvidersAtom } from '@/stores/atoms/uiAtoms'
 import { ScalableIcon } from '../common/ScalableIcon'
@@ -46,6 +47,7 @@ interface DesktopModelSelectorProps {
   modelFilter?: (model: ProviderModelInfo, providerId?: string) => boolean
   comboboxProps?: ComboboxProps
   searchPosition?: 'top' | 'bottom'
+  unified?: boolean
 }
 
 // Search box component with integrated SegmentedControl
@@ -54,12 +56,16 @@ const SearchBox = ({
   activeTab,
   onSearchChange,
   onTabChange,
+  onFetchModels,
+  fetchingModels,
   t,
 }: {
   search: string
   activeTab: string | null
   onSearchChange: (value: string) => void
   onTabChange: (value: string | null) => void
+  onFetchModels?: () => void
+  fetchingModels?: boolean
   t: (key: string) => string
 }) => (
   <Flex align="center" className="px-xs py-xs">
@@ -79,6 +85,22 @@ const SearchBox = ({
         },
       }}
     />
+    {onFetchModels && (
+      <Button
+        variant="subtle"
+        size="compact-xs"
+        loading={fetchingModels}
+        leftSection={<ScalableIcon icon={IconRefresh} size={13} />}
+        className="mr-xs flex-shrink-0"
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={(event) => {
+          event.stopPropagation()
+          onFetchModels()
+        }}
+      >
+        获取模型
+      </Button>
+    )}
     <SegmentedControl
       value={activeTab || 'all'}
       onChange={(value) => onTabChange(value)}
@@ -112,11 +134,13 @@ export const DesktopModelSelector = forwardRef<HTMLDivElement, DesktopModelSelec
       modelFilter,
       comboboxProps,
       searchPosition = 'bottom',
+      unified,
     },
     ref
   ) => {
     const { t } = useTranslation()
     const { favoritedModels: allFavoritedModels, favoriteModel, unfavoriteModel, isFavoritedModel } = useProviders()
+    const { fetching, refreshModels } = useV2APIModelRefresh()
     const [collapsedProviders, setCollapsedProviders] = useAtom(collapsedProvidersAtom)
 
     const favoritedModels = useMemo(() => {
@@ -157,6 +181,7 @@ export const DesktopModelSelector = forwardRef<HTMLDivElement, DesktopModelSelec
             model={model}
             isFavorited={isFavorited}
             isSelected={selectedProviderId === provider.id && selectedModelId === model.modelId}
+            hideModelIcon={unified}
             onToggleFavorited={() => {
               if (isFavorited) {
                 unfavoriteModel(provider.id, model.modelId)
@@ -169,6 +194,14 @@ export const DesktopModelSelector = forwardRef<HTMLDivElement, DesktopModelSelec
       })
 
       if (!provider.models?.length) return null
+
+      if (unified) {
+        return (
+          <div key={provider.id} className="mb-xs">
+            {options}
+          </div>
+        )
+      }
 
       return (
         <div key={provider.id}>
@@ -217,6 +250,8 @@ export const DesktopModelSelector = forwardRef<HTMLDivElement, DesktopModelSelec
                 activeTab={activeTab}
                 onSearchChange={onSearchChange}
                 onTabChange={onTabChange}
+                onFetchModels={unified ? refreshModels : undefined}
+                fetchingModels={fetching}
                 t={t}
               />
             </div>
@@ -248,40 +283,62 @@ export const DesktopModelSelector = forwardRef<HTMLDivElement, DesktopModelSelec
               </Stack>
             ) : activeTab === 'favorite' ? (
               <div>
-                {Object.entries(groupFavoriteModels(favoritedModels)).map(([providerId, group]) => (
-                  <div key={providerId}>
-                    <ProviderHeader
-                      provider={group.provider || { id: providerId, name: providerId }}
-                      showChevron={false}
-                      showModelCount={false}
-                      className="-ml-xs -mr-xs pr-sm"
-                    />
-                    <div className="mb-xs">
-                      {group.models.map((fm) => {
-                        if (!fm.provider || !fm.model) return null
-                        return (
-                          <ModelItem
-                            key={`${fm.provider.id}/${fm.model.modelId}`}
-                            providerId={fm.provider.id}
-                            model={fm.model}
-                            isFavorited={true}
-                            isSelected={selectedProviderId === fm.provider.id && selectedModelId === fm.model.modelId}
-                            hideFavoriteIcon={true}
-                            onToggleFavorited={() => {
-                              if (fm.provider && fm.model) {
-                                unfavoriteModel(fm.provider.id, fm.model.modelId)
-                              }
-                            }}
-                          />
-                        )
-                      })}
-                    </div>
-                  </div>
-                ))}
+                {unified
+                  ? favoritedModels?.map((fm) => {
+                      if (!fm.provider || !fm.model) return null
+                      return (
+                        <ModelItem
+                          key={`${fm.provider.id}/${fm.model.modelId}`}
+                          providerId={fm.provider.id}
+                          model={fm.model}
+                          isFavorited={true}
+                          isSelected={selectedProviderId === fm.provider.id && selectedModelId === fm.model.modelId}
+                          hideFavoriteIcon={true}
+                          hideModelIcon={true}
+                          onToggleFavorited={() => {
+                            if (fm.provider && fm.model) {
+                              unfavoriteModel(fm.provider.id, fm.model.modelId)
+                            }
+                          }}
+                        />
+                      )
+                    })
+                  : Object.entries(groupFavoriteModels(favoritedModels)).map(([providerId, group]) => (
+                      <div key={providerId}>
+                        <ProviderHeader
+                          provider={group.provider || { id: providerId, name: providerId }}
+                          showChevron={false}
+                          showModelCount={false}
+                          className="-ml-xs -mr-xs pr-sm"
+                        />
+                        <div className="mb-xs">
+                          {group.models.map((fm) => {
+                            if (!fm.provider || !fm.model) return null
+                            return (
+                              <ModelItem
+                                key={`${fm.provider.id}/${fm.model.modelId}`}
+                                providerId={fm.provider.id}
+                                model={fm.model}
+                                isFavorited={true}
+                                isSelected={
+                                  selectedProviderId === fm.provider.id && selectedModelId === fm.model.modelId
+                                }
+                                hideFavoriteIcon={true}
+                                onToggleFavorited={() => {
+                                  if (fm.provider && fm.model) {
+                                    unfavoriteModel(fm.provider.id, fm.model.modelId)
+                                  }
+                                }}
+                              />
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
               </div>
             ) : (
               <>
-                {favoritedModels && favoritedModels.length > 0 && (
+                {!unified && favoritedModels && favoritedModels.length > 0 && (
                   <div>
                     <ProviderHeader
                       provider={{ id: 'favorite', name: t('Favorite') }}
@@ -325,6 +382,8 @@ export const DesktopModelSelector = forwardRef<HTMLDivElement, DesktopModelSelec
                 activeTab={activeTab}
                 onSearchChange={onSearchChange}
                 onTabChange={onTabChange}
+                onFetchModels={unified ? refreshModels : undefined}
+                fetchingModels={fetching}
                 t={t}
               />
             </div>

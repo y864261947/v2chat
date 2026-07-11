@@ -10,6 +10,7 @@ import storage from '@/storage'
 import { StorageKeyGenerator } from '@/storage/StoreStorage'
 import * as settingActions from '@/stores/settingActions'
 import { settingsStore } from '@/stores/settingsStore'
+import { isV2ChatBusinessURL, v2chatAuthenticatedFetch } from '@/stores/v2chatAccountStore'
 import { apiRequest } from '@/utils/request'
 import { RendererSentryAdapter } from './sentry'
 
@@ -48,10 +49,21 @@ export async function createModelDependencies(): Promise<ModelDependencies> {
         init?: RequestInit,
         options?: { retry?: number; parseChatboxRemoteError?: boolean }
       ): Promise<Response> => {
+        if (isV2ChatBusinessURL(url)) {
+          return v2chatAuthenticatedFetch(url, init)
+        }
         // 支持自定义选项的 fetch
         return afetch(url, init, options || {})
       },
       async apiRequest(options: ApiRequestOptions): Promise<Response> {
+        if (isV2ChatBusinessURL(options.url)) {
+          return v2chatAuthenticatedFetch(options.url, {
+            method: options.method || 'GET',
+            headers: options.headers,
+            body: options.body,
+            signal: options.signal,
+          })
+        }
         if (options.method === 'POST') {
           return apiRequest.post(options.url, options.headers || {}, options.body, {
             signal: options.signal,

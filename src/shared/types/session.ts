@@ -249,6 +249,8 @@ export const CompactionPointSchema = z.object({
 // Session schemas
 export const SessionTypeSchema = z.enum(['chat', 'picture', 'guide'])
 
+export const ConversationModeSchema = z.enum(['assistant', 'roleplay'])
+
 export const MessageForkListSchema = z.object({
   id: z.string(),
   messages: z.array(MessageSchema),
@@ -274,17 +276,34 @@ export const ImageSourceSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('storage-key'), storageKey: z.string() }),
 ])
 
+export const SessionBackgroundAppearanceSchema = z.object({
+  opacity: z.number().min(0.2).max(1),
+  dim: z.number().min(0).max(0.7),
+  blur: z.number().min(0).max(16),
+})
+
 export const SessionSchema = z.object({
   id: z.string(),
   type: SessionTypeSchema.optional(),
+  conversationMode: ConversationModeSchema.optional(),
   name: z.string(),
   picUrl: z.string().optional(),
   messages: z.array(MessageSchema),
   starred: z.boolean().optional(),
   hidden: z.boolean().optional(), // Hidden from session list (e.g., migrated picture sessions)
   copilotId: z.string().optional(),
+  characterId: z.string().optional(),
+  characterDescription: z.string().optional(),
+  characterRelationship: z.string().optional(),
+  characterMemory: z.string().optional(),
+  characterMemoryUpdatedAt: z.number().optional(),
+  currentScene: z.string().optional(),
+  characterTags: z.array(z.string()).optional(),
+  characterVoiceId: z.string().optional(),
   assistantAvatarKey: z.string().optional(),
   backgroundImage: ImageSourceSchema.optional(),
+  backgroundAppearance: SessionBackgroundAppearanceSchema.optional(),
+  standingImage: ImageSourceSchema.optional(),
   settings: SessionSettingsSchema.optional(),
   threads: z.array(SessionThreadSchema).optional(),
   threadName: z.string().optional(),
@@ -295,11 +314,22 @@ export const SessionSchema = z.object({
 export const SessionMetaSchema = SessionSchema.pick({
   id: true,
   name: true,
+  conversationMode: true,
   starred: true,
   hidden: true,
   assistantAvatarKey: true,
+  characterId: true,
+  characterDescription: true,
+  characterRelationship: true,
+  characterMemory: true,
+  characterMemoryUpdatedAt: true,
+  currentScene: true,
+  characterTags: true,
+  characterVoiceId: true,
   picUrl: true,
   backgroundImage: true,
+  backgroundAppearance: true,
+  standingImage: true,
   type: true,
 })
 
@@ -345,6 +375,8 @@ export type ModelProvider = z.infer<typeof ModelProviderSchema>
 export type MessageStatus = z.infer<typeof MessageStatusSchema>
 export type Message = z.infer<typeof MessageSchema>
 export type SessionType = z.infer<typeof SessionTypeSchema>
+export type ConversationMode = z.infer<typeof ConversationModeSchema>
+export type SessionBackgroundAppearance = z.infer<typeof SessionBackgroundAppearanceSchema>
 export type CompactionPoint = z.infer<typeof CompactionPointSchema>
 export type Session = z.infer<typeof SessionSchema>
 export type SessionMeta = z.infer<typeof SessionMetaSchema>

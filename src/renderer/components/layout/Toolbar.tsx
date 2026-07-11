@@ -155,10 +155,7 @@ export default function Toolbar({ sessionId }: { sessionId: string }) {
       </ActionMenu>
     </Flex>
   ) : (
-    <Flex align="center" gap="xs">
-      <ActionIcon variant="subtle" size={24} color="chatbox-secondary" onClick={() => setOpenSearchDialog(true)}>
-        <IconSearch strokeWidth={1.8} />
-      </ActionIcon>
+    <Flex align="center" gap="sm" className="v2chat-mobile-im-actions">
       <ActionMenu
         position="bottom-end"
         items={[
@@ -205,8 +202,8 @@ export default function Toolbar({ sessionId }: { sessionId: string }) {
           },
         ]}
       >
-        <ActionIcon variant="subtle" size={24} color="chatbox-secondary">
-          <IconDots strokeWidth={1.8} />
+        <ActionIcon variant="subtle" size={32} color="chatbox-secondary">
+          <IconDots strokeWidth={2.1} />
         </ActionIcon>
       </ActionMenu>
     </Flex>

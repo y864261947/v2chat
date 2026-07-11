@@ -46,6 +46,7 @@ describe('SQLiteSessionMetaStorage', () => {
   it('createMany delegates batch writes to the Capacitor SQLite transaction API', async () => {
     const storage = new SQLiteSessionMetaStorage()
     const records = [makeRecord({ id: 'a' }), makeRecord({ id: 'b', starred: true })]
+    const emptyCharacterFields = Array(13).fill(null)
 
     await storage.createMany(records)
 
@@ -54,16 +55,26 @@ describe('SQLiteSessionMetaStorage', () => {
       [
         {
           statement: expect.stringContaining('INSERT OR REPLACE INTO session_meta'),
-          values: ['a', 'Test Session', 0, 0, null, null, null, 'chat', 100, 100],
+          values: ['a', 'Test Session', 0, 0, ...emptyCharacterFields, 'chat', 'assistant', 100, 100],
         },
         {
           statement: expect.stringContaining('INSERT OR REPLACE INTO session_meta'),
-          values: ['b', 'Test Session', 1, 0, null, null, null, 'chat', 100, 100],
+          values: ['b', 'Test Session', 1, 0, ...emptyCharacterFields, 'chat', 'assistant', 100, 100],
         },
       ],
       true
     )
     expect(mockDatabase.run).not.toHaveBeenCalled()
+  })
+
+  it('persists per-session background appearance in the metadata row', async () => {
+    const storage = new SQLiteSessionMetaStorage()
+    await storage.createMany([
+      makeRecord({ id: 'styled', backgroundAppearance: { opacity: 0.78, dim: 0.2, blur: 2 } }),
+    ])
+
+    const batch = mockDatabase.executeSet.mock.calls[0][0]
+    expect(batch[0].values[15]).toBe(JSON.stringify({ opacity: 0.78, dim: 0.2, blur: 2 }))
   })
 
   it('createMany preserves the original write error instead of masking it with rollback failure', async () => {

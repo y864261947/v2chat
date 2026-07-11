@@ -44,24 +44,25 @@ import CssBaseline from '@mui/material/CssBaseline'
 import { ThemeProvider } from '@mui/material/styles'
 import { useQuery } from '@tanstack/react-query'
 import { createRootRoute, Outlet, useLocation } from '@tanstack/react-router'
-import { useAtomValue, useSetAtom } from 'jotai'
+import { useSetAtom } from 'jotai'
 import { useEffect, useMemo, useRef } from 'react'
 import { trackJkViewEvent } from '@/analytics/jk'
 import { JK_EVENTS, JK_PAGE_NAMES } from '@/analytics/jk-events'
+import ForcedUpdateDialog from '@/components/update/ForcedUpdateDialog'
 import SettingsModal, { navigateToSettings } from '@/modals/Settings'
 import { prefetchModelRegistry } from '@/packages/model-registry'
 import { getOS } from '@/packages/navigator'
 import PictureDialog from '@/pages/PictureDialog'
-import RemoteDialogWindow from '@/pages/RemoteDialogWindow'
 import SearchDialog from '@/pages/SearchDialog'
 import platform from '@/platform'
 import { router } from '@/router'
 import Sidebar from '@/Sidebar'
 import storage from '@/storage'
 import * as atoms from '@/stores/atoms'
-import { getSession, useSession } from '@/stores/chatStore'
+import { getSession, listAllSessionsMeta } from '@/stores/chatStore'
 import { initOnboardingStore } from '@/stores/onboardingStore'
 import * as premiumActions from '@/stores/premiumActions'
+import { createEmpty, switchCurrentSession } from '@/stores/sessionActions'
 import { initSettingsStore, settingsStore, useLanguage, useSettingsStore, useTheme } from '@/stores/settingsStore'
 import { getTaskSession } from '@/stores/taskSessionStore'
 import { useUIStore } from '@/stores/uiStore'
@@ -74,16 +75,7 @@ function BackgroundImageOverlay() {
   const showSidebar = useUIStore((s) => s.showSidebar)
   const sidebarWidth = useSidebarWidth()
   const isRootPage = location.pathname === '/'
-  const isSessionPage = location.pathname.startsWith('/session/') && location.pathname.length > '/session/'.length
-  const sessionId =
-    isSessionPage && location.pathname !== '/session/new' ? location.pathname.slice('/session/'.length) : null
-  const { session } = useSession(sessionId)
-  const effectiveKey =
-    session?.backgroundImage?.type === 'storage-key'
-      ? session?.backgroundImage?.storageKey
-      : session?.backgroundImage?.type === 'url'
-        ? undefined
-        : globalBackgroundImageKey
+  const effectiveKey = globalBackgroundImageKey
   const { data: blob } = useQuery({
     queryKey: ['image-in-storage', effectiveKey],
     queryFn: async () => {
@@ -94,14 +86,9 @@ function BackgroundImageOverlay() {
     enabled: !!effectiveKey,
     staleTime: Number.POSITIVE_INFINITY,
   })
-  const imageUrl =
-    session?.backgroundImage?.type === 'url'
-      ? session.backgroundImage.url
-      : effectiveKey && blob
-        ? blobToDataUrl(blob)
-        : undefined
+  const imageUrl = effectiveKey && blob ? blobToDataUrl(blob) : undefined
 
-  if (!isRootPage && !isSessionPage) return null
+  if (!isRootPage) return null
   if (!imageUrl) return null
   return (
     <div className="absolute z-0 top-0 left-0 w-full h-full">
@@ -133,11 +120,12 @@ function BackgroundImageOverlay() {
 }
 
 function Root() {
-  const { isExceeded, isExceededResolved } = useVersion()
+  const { isExceededResolved } = useVersion()
   const location = useLocation()
   const spellCheck = useSettingsStore((state) => state.spellCheck)
   const language = useLanguage()
   const initialized = useRef(false)
+  const startupNavigationHandled = useRef(false)
 
   const setOpenAboutDialog = useUIStore((s) => s.setOpenAboutDialog)
 
@@ -185,7 +173,7 @@ function Root() {
         return
       }
     })()
-  }, [setOpenAboutDialog, setRemoteConfig, location.pathname, isExceeded, isExceededResolved])
+  }, [setOpenAboutDialog, setRemoteConfig, location.pathname, isExceededResolved])
 
   const showSidebar = useUIStore((s) => s.showSidebar)
   const sidebarWidth = useSidebarWidth()
@@ -204,17 +192,32 @@ function Root() {
   }, [_theme])
 
   useEffect(() => {
-    ;(() => {
-      const { startupPage } = settingsStore.getState()
-      const sid = JSON.parse(localStorage.getItem('_currentSessionIdCachedAtom') || '""') as string
-      if (sid && startupPage === 'session') {
-        router.navigate({
-          to: '/session/$sessionId',
-          params: { sessionId: sid },
-          search: (prev) => prev,
-          replace: true,
-        })
+    if (startupNavigationHandled.current) return
+    startupNavigationHandled.current = true
+
+    void (async () => {
+      await initSettingsStore()
+      if (router.state.location.pathname !== '/') return
+
+      if (settingsStore.getState().createNewChatOnStartup) {
+        await createEmpty('chat')
+        return
       }
+
+      let cachedSessionId: string | null = null
+      try {
+        const cachedValue = JSON.parse(localStorage.getItem('_currentSessionIdCachedAtom') || 'null')
+        cachedSessionId = typeof cachedValue === 'string' ? cachedValue : null
+      } catch {
+        cachedSessionId = null
+      }
+      if (cachedSessionId && (await getSession(cachedSessionId).catch(() => null))) {
+        switchCurrentSession(cachedSessionId)
+        return
+      }
+
+      const fallback = (await listAllSessionsMeta()).find((session) => !session.hidden && session.type !== 'picture')
+      if (fallback) switchCurrentSession(fallback.id)
     })()
   }, [])
 
@@ -345,8 +348,6 @@ function Root() {
       {/* <OpenAttachLinkDialog /> */}
       {/* 图片预览 */}
       <PictureDialog />
-      {/* 似乎是从后端拉一个弹窗的配置 */}
-      <RemoteDialogWindow />
       {/* 手机端举报内容 */}
       {/* <ReportContentDialog /> */}
       {/* 搜索 */}
@@ -356,6 +357,7 @@ function Root() {
       {/* <WelcomeDialog /> */}
       <Toasts /> {/* mui */}
       <SettingsModal />
+      <ForcedUpdateDialog />
     </Box>
   )
 }

@@ -27,7 +27,7 @@ import { getMetaStorage } from '@/stores/chatStore'
 import { migrateSession, sortSessions } from '@/utils/session-utils'
 import * as defaults from '../../shared/defaults'
 import { SESSION_ATTACHMENT_RAG_LOG_PREFIX } from '../../shared/session-attachment-rag/logging'
-import { createMessage, type Message, SessionSettingsSchema, TOKEN_CACHE_KEYS } from '../../shared/types'
+import { createMessage, type Message, type MessageAudioPart, SessionSettingsSchema, TOKEN_CACHE_KEYS } from '../../shared/types'
 import type { AttachmentPreparationResult, PreprocessedFile } from '../types/input-box'
 import { lastUsedModelStore } from './lastUsedModelStore'
 import * as settingActions from './settingActions'
@@ -609,6 +609,7 @@ export function constructUserMessage(
   messageId: string | undefined,
   text: string,
   pictureKeys: string[] = [],
+  audioParts: MessageAudioPart[] = [],
   preprocessedFiles: PreprocessedFile[] = [],
   preprocessedLinks: Array<{
     url: string
@@ -630,6 +631,11 @@ export function constructUserMessage(
   if (pictureKeys.length > 0) {
     msg.contentParts = msg.contentParts ?? []
     msg.contentParts.push(...pictureKeys.map((k) => ({ type: 'image' as const, storageKey: k })))
+  }
+
+  if (audioParts.length > 0) {
+    msg.contentParts = msg.contentParts ?? []
+    msg.contentParts.push(...audioParts)
   }
 
   if (preprocessedFiles.length > 0) {
@@ -726,6 +732,7 @@ export function initEmptyChatSession(): Omit<Session, 'id'> {
   const newSession: Omit<Session, 'id'> = {
     name: 'Untitled',
     type: 'chat',
+    conversationMode: 'assistant',
     messages: [],
     settings: {
       maxContextMessageCount: settings.maxContextMessageCount ?? Number.MAX_SAFE_INTEGER,
@@ -759,7 +766,27 @@ export function initEmptyPictureSession(): Omit<Session, 'id'> {
 }
 
 export function getSessionMeta(session: SessionMeta) {
-  return pick(session, ['id', 'name', 'starred', 'hidden', 'assistantAvatarKey', 'picUrl', 'backgroundImage', 'type'])
+  return pick(session, [
+    'id',
+    'name',
+    'starred',
+    'hidden',
+    'assistantAvatarKey',
+    'picUrl',
+    'conversationMode',
+    'characterId',
+    'characterDescription',
+    'characterRelationship',
+    'characterMemory',
+    'characterMemoryUpdatedAt',
+    'currentScene',
+    'characterTags',
+    'characterVoiceId',
+    'backgroundImage',
+    'backgroundAppearance',
+    'standingImage',
+    'type',
+  ])
 }
 
 function _searchSessions(regexp: RegExp, s: Session) {

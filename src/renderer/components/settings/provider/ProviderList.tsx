@@ -15,9 +15,10 @@ import { FEATURED_PROVIDER_IDS, ProviderIconImage } from './providerIcons'
 interface ProviderListProps {
   providers: ProviderBaseInfo[]
   onAddProvider: () => void
+  showAddProvider?: boolean
 }
 
-export function ProviderList({ providers, onAddProvider }: ProviderListProps) {
+export function ProviderList({ providers, onAddProvider, showAddProvider = true }: ProviderListProps) {
   const { t } = useTranslation()
   const isSmallScreen = useIsSmallScreen()
   const routerState = useRouterState()
@@ -113,11 +114,13 @@ export function ProviderList({ providers, onAddProvider }: ProviderListProps) {
           ))}
         </Stack>
       </ScrollArea>
-      <Stack gap="xs" mx="md" my="sm">
-        <Button variant="outline" leftSection={<ScalableIcon icon={IconPlus} />} onClick={onAddProvider}>
-          {t('Add')}
-        </Button>
-      </Stack>
+      {showAddProvider && (
+        <Stack gap="xs" mx="md" my="sm">
+          <Button variant="outline" leftSection={<ScalableIcon icon={IconPlus} />} onClick={onAddProvider}>
+            {t('Add')}
+          </Button>
+        </Stack>
+      )}
     </Stack>
   )
 }

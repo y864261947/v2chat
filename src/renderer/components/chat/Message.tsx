@@ -6,12 +6,15 @@ import { getMessageText } from '@shared/utils/message'
 import {
   IconArrowDown,
   IconBug,
+  IconChevronDown,
   IconCode,
   IconCopy,
   IconDotsVertical,
   IconInfoCircle,
   IconMessageReport,
   IconPencil,
+  IconPlayerPause,
+  IconPlayerPlay,
   IconPhotoPlus,
   type IconProps,
   IconQuoteFilled,
@@ -24,7 +27,7 @@ import * as dateFns from 'date-fns'
 import { concat } from 'lodash'
 import type { UIElementData } from 'photoswipe'
 import type React from 'react'
-import { type FC, forwardRef, type MouseEventHandler, memo, useCallback, useMemo, useRef, useState } from 'react'
+import { type FC, forwardRef, type MouseEventHandler, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Gallery, Item as GalleryItem } from 'react-photoswipe-gallery'
 import { trackJkClickEvent } from '@/analytics/jk'
@@ -98,20 +101,27 @@ const _Message: FC<Props> = (props) => {
     messageLayout,
   } = useSettingsStore((state) => state)
 
-  const isBubbleLayout = messageLayout === 'bubble'
+  const isBubbleLayout = messageLayout !== 'left'
 
   const [previewArtifact, setPreviewArtifact] = useState(autoPreviewArtifacts)
   const [shouldThrowError, setShouldThrowError] = useState(false)
 
-  const contentLength = useMemo(() => {
-    return getMessageText(msg).length
-  }, [msg])
+  const messageText = useMemo(() => getMessageText(msg), [msg])
+  const contentLength = messageText.length
+  const roleplayCharacterName = useMemo(() => {
+    if (msg.role !== 'system') return null
+    return messageText.match(/^You are roleplaying as\s+(.+?)\.\s*(?:\n|$)/i)?.[1]?.trim() || null
+  }, [messageText, msg.role])
+  const isRoleplaySystemMessage = Boolean(roleplayCharacterName)
 
   const needCollapse =
-    collapseThreshold &&
-    props.sessionType !== 'picture' && // 绘图会话不折叠
-    contentLength > collapseThreshold &&
-    contentLength - collapseThreshold > 50 // 只有折叠有明显效果才折叠，为了更好的用户体验
+    isRoleplaySystemMessage ||
+    Boolean(
+      collapseThreshold &&
+        props.sessionType !== 'picture' && // 绘图会话不折叠
+        contentLength > collapseThreshold &&
+        contentLength - collapseThreshold > 50 // 只有折叠有明显效果才折叠，为了更好的用户体验
+    )
   const [isCollapsed, setIsCollapsed] = useState(needCollapse)
 
   const ref = useRef<HTMLDivElement>(null)
@@ -381,6 +391,57 @@ const _Message: FC<Props> = (props) => {
     ]
   )
   const [actionMenuOpened, setActionMenuOpened] = useState(false)
+  const messageLongPressTimerRef = useRef<number | null>(null)
+  const messageLongPressStartRef = useRef<{ x: number; y: number } | null>(null)
+  const canLongPressMessage = isSmallScreen && (msg.role === 'user' || msg.role === 'assistant') && !msg.generating
+
+  const clearMessageLongPress = useCallback(() => {
+    if (messageLongPressTimerRef.current !== null) {
+      window.clearTimeout(messageLongPressTimerRef.current)
+      messageLongPressTimerRef.current = null
+    }
+    messageLongPressStartRef.current = null
+  }, [])
+
+  useEffect(() => clearMessageLongPress, [clearMessageLongPress])
+
+  const handleMessagePointerDown = useCallback(
+    (event: React.PointerEvent<HTMLElement>) => {
+      if (!canLongPressMessage || event.button !== 0) return
+      const target = event.target as HTMLElement
+      if (target.closest('button, a, input, textarea, audio, video')) return
+
+      clearMessageLongPress()
+      messageLongPressStartRef.current = { x: event.clientX, y: event.clientY }
+      messageLongPressTimerRef.current = window.setTimeout(() => {
+        messageLongPressTimerRef.current = null
+        setActionMenuOpened(true)
+        navigator.vibrate?.(18)
+      }, 460)
+    },
+    [canLongPressMessage, clearMessageLongPress]
+  )
+
+  const handleMessagePointerMove = useCallback(
+    (event: React.PointerEvent<HTMLElement>) => {
+      const start = messageLongPressStartRef.current
+      if (!start) return
+      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) {
+        clearMessageLongPress()
+      }
+    },
+    [clearMessageLongPress]
+  )
+
+  const handleMessageContextMenu = useCallback(
+    (event: React.MouseEvent<HTMLElement>) => {
+      if (!canLongPressMessage) return
+      event.preventDefault()
+      clearMessageLongPress()
+      setActionMenuOpened(true)
+    },
+    [canLongPressMessage, clearMessageLongPress]
+  )
 
   const isUserBubble = isBubbleLayout && msg.role === 'user'
   const statusElements = <MessageStatuses statuses={msg.status} />
@@ -425,7 +486,18 @@ const _Message: FC<Props> = (props) => {
                   </div>
                 ) : item.type === 'text' ? (
                   <div key={`text-${msg.id}-${index}`}>
-                    {enableMarkdownRendering && !isCollapsed ? (
+                    {isRoleplaySystemMessage && isCollapsed ? (
+                      <button
+                        type="button"
+                        className="v2chat-role-prompt-summary"
+                        onClick={() => setIsCollapsed(false)}
+                        aria-label="展开角色设定"
+                      >
+                        <span className="v2chat-role-prompt-summary__label">角色设定</span>
+                        <span className="v2chat-role-prompt-summary__name">{roleplayCharacterName}</span>
+                        <IconChevronDown size={16} strokeWidth={2} />
+                      </button>
+                    ) : enableMarkdownRendering && !isCollapsed ? (
                       <Markdown
                         uniqueId={`${msg.id}-${index}`}
                         enableLaTeXRendering={enableLaTeXRendering}
@@ -504,7 +576,15 @@ const _Message: FC<Props> = (props) => {
                     </div>
                   )
                 ) : item.type === 'audio' ? (
-                  <AudioInStorage key={`audio-${item.storageKey}`} storageKey={item.storageKey} mimeType={item.mimeType} />
+                  <AudioInStorage
+                    key={`audio-${item.storageKey}`}
+                    storageKey={item.storageKey}
+                    mimeType={item.mimeType}
+                    durationMs={item.durationMs}
+                    transcript={item.transcript}
+                    error={item.error}
+                    role={msg.role}
+                  />
                 ) : item.type === 'tool-call' ? (
                   <ToolCallPartUI key={item.toolCallId} part={item as MessageToolCallPart} />
                 ) : null
@@ -561,6 +641,7 @@ const _Message: FC<Props> = (props) => {
       gap={0}
       m="4px -4px -4px -4px"
       className={clsx(
+        'v2chat-message-actions',
         'group-hover/message:opacity-100 opacity-0 transition-opacity',
         actionMenuOpened || buttonGroup === 'always' ? 'opacity-100' : '',
         isSmallScreen ? 'sticky bottom-4' : ''
@@ -606,7 +687,7 @@ const _Message: FC<Props> = (props) => {
       direction="column"
       gap={2}
       mt={isBubbleLayout ? 4 : 2}
-      className={cn(isBubbleLayout ? 'px-1' : '')}
+      className={cn('v2chat-message-meta', isBubbleLayout ? 'px-1' : '')}
       align={isUserBubble ? 'flex-end' : 'flex-start'}
     >
       {tipsElements && (
@@ -629,6 +710,12 @@ const _Message: FC<Props> = (props) => {
         ref={ref}
         id={props.id}
         key={msg.id}
+        onPointerDown={handleMessagePointerDown}
+        onPointerMove={handleMessagePointerMove}
+        onPointerUp={clearMessageLongPress}
+        onPointerCancel={clearMessageLongPress}
+        onPointerLeave={clearMessageLongPress}
+        onContextMenu={handleMessageContextMenu}
         className={cn(
           'group/message',
           'msg-block',
@@ -648,7 +735,11 @@ const _Message: FC<Props> = (props) => {
         }}
       >
         <Flex justify="flex-end" gap="xs" className="w-full">
-          <Flex direction="column" align="flex-end" className={cn('max-w-[85%]', isSmallScreen && 'max-w-[95%]')}>
+          <Flex
+            direction="column"
+            align="flex-end"
+            className={cn('v2chat-message-stack-user max-w-[85%]', isSmallScreen && 'max-w-[95%]')}
+          >
             {messageContent}
             {(msg.files || msg.links) && <MessageAttachmentGrid files={msg.files} links={msg.links} align="end" />}
             {meta}
@@ -669,6 +760,12 @@ const _Message: FC<Props> = (props) => {
       ref={ref}
       id={props.id}
       key={msg.id}
+      onPointerDown={handleMessagePointerDown}
+      onPointerMove={handleMessagePointerMove}
+      onPointerUp={clearMessageLongPress}
+      onPointerCancel={clearMessageLongPress}
+      onPointerLeave={clearMessageLongPress}
+      onContextMenu={handleMessageContextMenu}
       className={cn(
         'group/message',
         'msg-block',
@@ -892,9 +989,68 @@ const ImageInStorageGalleryItem = ({ storageKey, height }: { storageKey: string;
   ) : null
 }
 
-const AudioInStorage = ({ storageKey, mimeType }: { storageKey: string; mimeType: string }) => {
+const AudioInStorage = ({
+  storageKey,
+  mimeType,
+  durationMs,
+  transcript,
+  error,
+  role,
+}: {
+  storageKey: string
+  mimeType: string
+  durationMs?: number
+  transcript?: string
+  error?: string
+  role: Message['role']
+}) => {
   const { data } = useBlob(storageKey)
   const src = data?.startsWith('data:') ? data : data ? `data:${mimeType};base64,${data}` : undefined
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const [playing, setPlaying] = useState(false)
+  const [duration, setDuration] = useState(durationMs || 0)
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    const onEnded = () => setPlaying(false)
+    const onPause = () => setPlaying(false)
+    const onPlay = () => setPlaying(true)
+    const onLoadedMetadata = () => {
+      if (Number.isFinite(audio.duration)) {
+        setDuration(Math.max(durationMs || 0, audio.duration * 1000))
+      }
+    }
+    audio.addEventListener('ended', onEnded)
+    audio.addEventListener('pause', onPause)
+    audio.addEventListener('play', onPlay)
+    audio.addEventListener('loadedmetadata', onLoadedMetadata)
+    return () => {
+      audio.removeEventListener('ended', onEnded)
+      audio.removeEventListener('pause', onPause)
+      audio.removeEventListener('play', onPlay)
+      audio.removeEventListener('loadedmetadata', onLoadedMetadata)
+    }
+  }, [durationMs])
+
+  const togglePlay = async () => {
+    const audio = audioRef.current
+    if (!audio) return
+    if (playing) {
+      audio.pause()
+    } else {
+      await audio.play().catch(() => undefined)
+    }
+  }
+
+  if (error) {
+    return (
+      <Flex className="v2chat-voice-message v2chat-voice-message--error my-2" align="center">
+        <span>语音生成失败</span>
+        <span>{error}</span>
+      </Flex>
+    )
+  }
 
   if (!src) {
     return null
@@ -902,9 +1058,30 @@ const AudioInStorage = ({ storageKey, mimeType }: { storageKey: string; mimeType
 
   return (
     <Flex className="my-2 max-w-full" align="center">
-      <audio controls preload="metadata" src={src} className="max-w-full" />
+      <button
+        type="button"
+        className={cn('v2chat-voice-message', role === 'user' && 'v2chat-voice-message--user', playing && 'playing')}
+        onClick={togglePlay}
+        title={transcript}
+      >
+        <span className="v2chat-voice-message__play">
+          <ScalableIcon icon={playing ? IconPlayerPause : IconPlayerPlay} size={18} />
+        </span>
+        <span className="v2chat-voice-message__wave" aria-hidden="true">
+          {Array.from({ length: 22 }).map((_, index) => (
+            <i key={index} style={{ ['--bar' as string]: `${18 + ((index * 17) % 35)}%` }} />
+          ))}
+        </span>
+        <span className="v2chat-voice-message__duration">{formatAudioDuration(duration)}</span>
+      </button>
+      <audio ref={audioRef} preload="metadata" src={src} className="hidden" />
     </Flex>
   )
+}
+
+function formatAudioDuration(durationMs?: number) {
+  if (!durationMs) return '--"'
+  return `${Math.max(1, Math.round(durationMs / 1000))}"`
 }
 
 export const MessageActionIcon = forwardRef<

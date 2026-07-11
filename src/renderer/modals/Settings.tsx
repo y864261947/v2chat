@@ -19,6 +19,7 @@ import { Modal } from '@/components/layout/Overlay'
 import { getThemeDesign } from '@/hooks/useAppTheme'
 import useNeedRoomForWinControls from '@/hooks/useNeedRoomForWinControls'
 import { router } from '@/router'
+import { RouteComponent as SettingsAccountRouteComponent } from '@/routes/settings/account'
 import { RouteComponent as SettingsChatRouteComponent } from '@/routes/settings/chat'
 import { RouteComponent as SettingsDefaultModelsRouteComponent } from '@/routes/settings/default-models'
 import { RouteComponent as SettingsDocumentParserRouteComponent } from '@/routes/settings/document-parser'
@@ -150,6 +151,12 @@ const SettingsV2APIRoute = createRoute({
   getParentRoute: () => RootRoute,
 })
 
+const SettingsAccountRoute = createRoute({
+  component: SettingsAccountRouteComponent,
+  path: '/settings/account',
+  getParentRoute: () => RootRoute,
+})
+
 const SettingsGeneralRoute = createRoute({
   component: SettingsGeneralRouteComponent,
   path: '/settings/general',
@@ -229,6 +236,7 @@ SettingsProviderRouteRoute.addChildren([
 
 const routeTree = RootRoute.addChildren([
   SettingsIndexRoute,
+  SettingsAccountRoute,
   SettingsV2APIRoute,
   SettingsGeneralRoute,
   SettingsChatRoute,

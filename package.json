@@ -1,7 +1,7 @@
 {
   "name": "xyz.chatboxapp.ce",
   "productName": "V2Chat",
-  "version": "0.0.1",
+  "version": "0.1.1",
   "engines": {
     "node": ">=22.12.0 <26.0.0",
     "pnpm": ">=10.17.0"
@@ -149,6 +149,7 @@
     "@types/canvas-confetti": "^1.9.0",
     "@types/d3": "^7.4.3",
     "@types/epub": "^0.0.11",
+    "@types/fs-extra": "9.0.13",
     "@types/gtag.js": "^0.0.13",
     "@types/highlight.js": "^10.1.0",
     "@types/katex": "^0.16.2",
@@ -294,6 +295,9 @@
     "zustand": "^5.0.6"
   },
   "dependencies": {
+    "@ai-sdk/provider-utils": "^4.0.13",
+    "@aws-crypto/sha256-js": "^5.2.0",
+    "@anthropic-ai/sandbox-runtime": "0.0.34",
     "@libsql/client": "^0.15.6",
     "@lobehub/icons": "^4.0.2",
     "@mastra/core": "^0.13.2",
@@ -301,10 +305,13 @@
     "@mastra/rag": "^1.0.8",
     "@modelcontextprotocol/sdk": "^1.15.1",
     "@mozilla/readability": "^0.5.0",
+    "@mui/system": "^5.18.0",
     "@sentry/node": "^9.28.1",
+    "adm-zip": "0.5.16",
     "auto-launch": "^5.0.6",
     "chardet": "^2.1.0",
     "cohere-ai": "^7.17.1",
+    "date-fns": "^3.6.0",
     "electron-debug": "^3.2.0",
     "electron-devtools-installer": "^3.2.0",
     "electron-log": "^5.3.4",
@@ -314,11 +321,14 @@
     "es-toolkit": "^1.43.0",
     "fs-extra": "^11.1.1",
     "iconv-lite": "^0.6.3",
+    "katex": "0.16.25",
     "linkedom": "^0.18.5",
     "lodash": "^4.17.21",
     "ofetch": "^1.0.1",
     "officeparser": "5.0.0",
     "sanitize-filename": "^1.6.3",
+    "shiki": "^3.22.0",
+    "source-map-support": "0.5.21",
     "uuid": "^9.0.0"
   },
   "browserslist": [],
@@ -342,8 +352,7 @@
       "esbuild",
       "msw",
       "protobufjs",
-      "sharp",
-      "zipfile"
+      "sharp"
     ],
     "overrides": {
       "@tanstack/router-generator": "1.120.15",
@@ -360,5 +369,5 @@
       "@ai-sdk/deepseek@2.0.17": "patches/@ai-sdk__deepseek@2.0.17.patch"
     }
   },
-  "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319"
+  "packageManager": "pnpm@10.17.0"
 }

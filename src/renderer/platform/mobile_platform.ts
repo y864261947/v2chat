@@ -20,6 +20,7 @@ import mobileLogger from './mobile_logger'
 import type { SessionAttachmentRagController } from './session-attachment-rag/interface'
 import { MobileSQLiteStorage } from './storages'
 import { parseTextFileLocally } from './web_platform_utils'
+import { androidUpdater, isAndroidUpdaterAvailable } from './androidUpdater'
 
 export default class MobilePlatform extends MobileSQLiteStorage implements Platform {
   public type: PlatformType = 'mobile'
@@ -44,7 +45,7 @@ export default class MobilePlatform extends MobileSQLiteStorage implements Platf
   // 处理深度链接
   private handleDeepLink(url: string): void {
     try {
-      // 支持 chatbox:// 和 chatbox-dev:// 两种协议（归一化处理）
+      // 保留旧测试包协议兼容，正式业务统一使用 v2chat://。
       const normalizedUrl = url.replace(/^chatbox-dev:\/\//, 'chatbox://')
       const parsedUrl = new URL(normalizedUrl)
 
@@ -59,6 +60,11 @@ export default class MobilePlatform extends MobileSQLiteStorage implements Platf
       // 处理 auth 回调链接: chatbox://auth/callback?ticket_id=xxx&status=success
       if (parsedUrl.hostname === 'auth' && parsedUrl.pathname === '/callback') {
         // 不需要，实际跳回到 app 后业务hooks useLogin 会处理后续动作
+      }
+
+      if (parsedUrl.protocol === 'v2chat:' && parsedUrl.hostname === 'payment') {
+        this.triggerNavigation('/settings/account')
+        return
       }
 
       console.warn('Unhandled deep link:', url)
@@ -252,8 +258,15 @@ export default class MobilePlatform extends MobileSQLiteStorage implements Platf
     return
   }
 
-  installUpdate(): Promise<void> {
-    throw new Error('Method not implemented.')
+  async checkForUpdate(): Promise<{ started: boolean }> {
+    if (!isAndroidUpdaterAvailable()) return { started: false }
+    const { checkForAndroidUpdate } = await import('@/stores/updateStore')
+    return checkForAndroidUpdate(true)
+  }
+
+  async installUpdate(): Promise<void> {
+    if (!isAndroidUpdaterAvailable()) throw new Error('当前平台不支持应用内安装')
+    await androidUpdater.install()
   }
 
   public getKnowledgeBaseController(): KnowledgeBaseController {

@@ -1,6 +1,7 @@
 import { Box, Flex } from '@mantine/core'
 import { SystemProviders } from '@shared/defaults'
 import type { ModelProviderEnum, ProviderInfo, ProviderSettings } from '@shared/types'
+import { V2API_PROVIDER_IDS } from '@shared/v2api'
 import { createFileRoute, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
 import { zodValidator } from '@tanstack/zod-adapter'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -12,7 +13,6 @@ import { ProviderList } from '@/components/settings/provider/ProviderList'
 import ProviderSpotlight, { providerSpotlight } from '@/components/settings/provider/ProviderSpotlight'
 import { useProviderImport } from '@/hooks/useProviderImport'
 import { useIsSmallScreen } from '@/hooks/useScreenChange'
-import useVersion from '@/hooks/useVersion'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { add as addToast } from '@/stores/toastActions'
 import { decodeBase64 } from '@/utils/base64'
@@ -22,6 +22,8 @@ const searchSchema = z.object({
   import: z.string().optional(), // base64 encoded config
   custom: z.boolean().optional(),
 })
+
+const V2CHAT_VISIBLE_PROVIDER_IDS = new Set<string>(V2API_PROVIDER_IDS)
 
 export const Route = createFileRoute('/settings/provider')({
   component: RouteComponent,
@@ -33,19 +35,15 @@ export function RouteComponent() {
   const navigate = useNavigate()
   const isSmallScreen = useIsSmallScreen()
   const routerState = useRouterState()
-  const customProviders = useSettingsStore((state) => state.customProviders)
   const providersMap = useSettingsStore((state) => state.providers)
-  const { isExceeded } = useVersion()
 
   const providers = useMemo<ProviderInfo[]>(() => {
-    const systemProviders = SystemProviders().filter(
-      (p) => !(isExceeded && p.name.toLocaleLowerCase().match(/openai|claude|gemini/i))
-    )
-    return [...systemProviders, ...(customProviders || [])].map((p) => ({
+    const systemProviders = SystemProviders().filter((p) => V2CHAT_VISIBLE_PROVIDER_IDS.has(p.id))
+    return systemProviders.map((p) => ({
       ...p,
       ...(providersMap?.[p.id] || {}),
     }))
-  }, [customProviders, isExceeded, providersMap])
+  }, [providersMap])
 
   const allSystemProviders = useMemo(() => {
     return providers.filter((p) => !p.isCustom)
@@ -144,7 +142,7 @@ export function RouteComponent() {
   return (
     <Flex h="100%" w="100%">
       {(!isSmallScreen || routerState.location.pathname === '/settings/provider') && (
-        <ProviderList providers={providers} onAddProvider={handleOpenSpotlight} />
+        <ProviderList providers={providers} onAddProvider={handleOpenSpotlight} showAddProvider={false} />
       )}
       {!(isSmallScreen && routerState.location.pathname === '/settings/provider') && (
         <Box flex="1 1 75%" p="md" className="overflow-auto">

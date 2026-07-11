@@ -1,5 +1,6 @@
 import type {
   Message,
+  MessageAudioPart,
   SessionAttachmentAvailability,
   SessionAttachmentIndexingStage,
   SessionAttachmentIndexStatus,
@@ -48,6 +49,7 @@ export type PreConstructedMessageState = {
   draftMessageId?: string
   text: string
   pictureKeys: string[]
+  audioParts: MessageAudioPart[]
   attachments: File[]
   links: { url: string }[]
   preprocessedFiles: PreprocessedFile[]

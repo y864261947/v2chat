@@ -5,8 +5,6 @@ import {
   Divider,
   FileButton,
   Flex,
-  Radio,
-  Select,
   Stack,
   Switch,
   Text,
@@ -18,7 +16,7 @@ import { formatFileSize } from '@shared/utils'
 import { IconInfoCircle } from '@tabler/icons-react'
 import { createFileRoute } from '@tanstack/react-router'
 import dayjs from 'dayjs'
-import { mapValues, uniqBy } from 'lodash'
+import { mapValues } from 'lodash'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AdaptiveSelect } from '@/components/AdaptiveSelect'
@@ -118,20 +116,12 @@ export function RouteComponent() {
           />
         </Stack>
 
-        {/* Startup Page */}
-        <Stack>
-          <Text>{t('Startup Page')}</Text>
-          <Radio.Group
-            value={settings.startupPage}
-            defaultValue="home"
-            onChange={(val) => setSettings({ startupPage: val as any })}
-          >
-            <Flex gap="md">
-              <Radio label={t('Home Page')} value="home" />
-              <Radio label={t('Last Session')} value="session" />
-            </Flex>
-          </Radio.Group>
-        </Stack>
+        <Switch
+          label="启动时新建对话"
+          description="关闭时接续上一次打开的对话；开启后每次启动都会创建一个空白对话。"
+          checked={settings.createNewChatOnStartup}
+          onChange={(event) => setSettings({ createNewChatOnStartup: event.currentTarget.checked })}
+        />
       </Stack>
 
       <Divider />
@@ -631,15 +621,6 @@ const ExportLogsSection = () => {
     }
   }
 
-  const handleClearLogs = async () => {
-    try {
-      await platform.clearLogs()
-      setExportResult({ success: true })
-    } catch (error) {
-      console.error('Failed to clear logs:', error)
-    }
-  }
-
   return (
     <Stack gap="md">
       <Stack gap="xxs">
@@ -654,9 +635,6 @@ const ExportLogsSection = () => {
         <Button variant="primary" onClick={handleExportLogs} disabled={isExporting} loading={isExporting}>
           {isExporting ? t('Exporting...') : t('Export Logs')}
         </Button>
-        {/* <Button variant="subtle" color="red" onClick={handleClearLogs} disabled={isExporting}>
-          {t('Clear Logs')}
-        </Button> */}
       </Flex>
       {exportResult && !exportResult.success && (
         <Alert className="self-start" variant="light" color="red" title={t('Export failed')} icon={<IconInfoCircle />}>

@@ -2,8 +2,10 @@ import { BaseError } from '@shared/models/errors'
 import { getModel } from '@shared/providers'
 import type { ImageGeneration, ImageGenerationModel } from '@shared/types'
 import { ModelProviderEnum } from '@shared/types'
+import { V2API_DEFAULT_IMAGE_MODEL } from '@shared/v2api'
 import { createModelDependencies } from '@/adapters'
 import { getLogger } from '@/lib/utils'
+import { generateOpenAICompatibleImages } from '@/packages/openai-compatible-image'
 import {
   type ImageGenerationTaskResponse,
   pollImageTask,
@@ -40,6 +42,11 @@ function getLicenseKey(): string {
 
 function shouldUseAsyncPath(provider: string): boolean {
   return provider === ModelProviderEnum.ChatboxAI
+}
+
+function shouldUseConfiguredV2APIImageAPI(provider: string, modelId: string): boolean {
+  const v2api = settingsStore.getState().getSettings().v2api
+  return provider === ModelProviderEnum.V2APIOpenAI && modelId === (v2api?.imageModel || V2API_DEFAULT_IMAGE_MODEL)
 }
 
 function getErrorRecordUpdate(
@@ -253,12 +260,6 @@ async function generateImagesDirect(recordId: string, params: GenerateImageParam
     // Build model instance via provider registry
     const dependencies = await createModelDependencies()
     const globalSettings = settingsStore.getState().getSettings()
-    const configs = await platform.getConfig()
-    const sessionSettings = {
-      provider: params.model.provider,
-      modelId: params.model.modelId,
-    }
-    const model = getModel(sessionSettings, globalSettings, configs, dependencies)
 
     // Prepare reference images: storage keys → base64 data URLs
     const images: { imageUrl: string }[] = []
@@ -272,6 +273,53 @@ async function generateImagesDirect(recordId: string, params: GenerateImageParam
         images.push({ imageUrl: imageData })
       }
     }
+
+    if (shouldUseConfiguredV2APIImageAPI(params.model.provider, params.model.modelId)) {
+      const v2api = globalSettings.v2api
+      trackEvent('generate_image', {
+        provider: params.model.provider,
+        model: params.model.modelId,
+        num_images: num,
+        has_reference: params.referenceImages.length > 0,
+        path: params.referenceImages.length > 0 ? 'v2api-edit' : 'v2api-generations',
+      })
+      const resultDataUrls = await generateOpenAICompatibleImages({
+        apiKey: v2api?.imageApiKey || '',
+        baseUrl: v2api?.imageBaseUrl,
+        model: v2api?.imageModel || params.model.modelId,
+        prompt: params.prompt,
+        num,
+        referenceImageDataUrls: images.map((image) => image.imageUrl),
+        signal,
+      })
+
+      for (const dataUrl of resultDataUrls) {
+        const storageKey = StorageKeyGenerator.picture(`image-gen:${recordId}`)
+        await storage.setBlob(storageKey, dataUrl)
+        const updated = await addGeneratedImage(recordId, storageKey)
+        if (updated) {
+          queryClient.setQueryData([IMAGE_GEN_QUERY_KEY, recordId], updated)
+        }
+      }
+
+      currentRecord = await updateRecord(recordId, {
+        status: resultDataUrls.length < num ? 'error' : 'done',
+        error: resultDataUrls.length < num ? 'Some images failed to generate' : undefined,
+      })
+
+      if (currentRecord) {
+        queryClient.setQueryData([IMAGE_GEN_QUERY_KEY, recordId], currentRecord)
+      }
+      log.debug('V2API image generation completed:', recordId, 'images:', resultDataUrls.length)
+      return
+    }
+
+    const configs = await platform.getConfig()
+    const sessionSettings = {
+      provider: params.model.provider,
+      modelId: params.model.modelId,
+    }
+    const model = getModel(sessionSettings, globalSettings, configs, dependencies)
 
     trackEvent('generate_image', {
       provider: params.model.provider,

@@ -1,6 +1,11 @@
 import { fetchRemoteModels } from '../../models/openai-compatible'
 import { ModelProviderEnum, ModelProviderType, type ProviderModelInfo } from '../../types'
-import { V2API_BASE_URL, V2API_DEFAULT_CHAT_MODEL, guessV2APIModelCapabilities } from '../../v2api'
+import {
+  V2API_BASE_URL,
+  V2API_DEFAULT_CHAT_MODEL,
+  getV2ChatServiceBaseUrl,
+  guessV2APIModelCapabilities,
+} from '../../v2api'
 import { defineProvider } from '../registry'
 import Claude from './models/claude'
 import Gemini from './models/gemini'
@@ -17,10 +22,11 @@ function withV2APICapabilities(models: ProviderModelInfo[]): ProviderModelInfo[]
 }
 
 async function listV2APIModels(config: CreateModelConfig): Promise<ProviderModelInfo[]> {
+  const accountMode = config.globalSettings.v2api?.mode !== 'byok'
   const models = await fetchRemoteModels(
     {
-      apiHost: V2API_BASE_URL,
-      apiKey: config.effectiveApiKey,
+      apiHost: accountMode ? getV2ChatServiceBaseUrl() : V2API_BASE_URL,
+      apiKey: accountMode ? 'v2chat-account' : config.effectiveApiKey,
       useProxy: false,
     },
     config.dependencies
@@ -91,13 +97,18 @@ export const v2apiOpenAIProvider = defineProvider({
   description: 'V2API OpenAI-compatible protocol. Base URL is fixed.',
   defaultSettings: {
     apiHost: V2API_BASE_URL,
+    apiKey: '',
     models: defaultModels,
   },
-  createModel: (config) =>
+  createModel: (config) => {
+    const accountMode = config.globalSettings.v2api?.mode !== 'byok'
+    const apiHost = accountMode ? getV2ChatServiceBaseUrl() : V2API_BASE_URL
+    const apiKey = accountMode ? 'v2chat-account' : config.effectiveApiKey
+    return (
     new V2APIOpenAIModel(
       {
-        apiKey: config.effectiveApiKey,
-        apiHost: V2API_BASE_URL,
+        apiKey,
+        apiHost,
         model: config.model,
         dalleStyle: config.settings.dalleStyle || 'vivid',
         temperature: config.settings.temperature,
@@ -110,9 +121,11 @@ export const v2apiOpenAIProvider = defineProvider({
       },
       config.dependencies,
       config
-    ),
+    )
+    )
+  },
   getDisplayName: (modelId, providerSettings) =>
-    `V2API OpenAI (${providerSettings?.models?.find((m) => m.modelId === modelId)?.nickname || modelId})`,
+    providerSettings?.models?.find((m) => m.modelId === modelId)?.nickname || modelId,
 })
 
 export const v2apiClaudeProvider = defineProvider({
@@ -122,6 +135,7 @@ export const v2apiClaudeProvider = defineProvider({
   description: 'V2API Claude protocol. Base URL is fixed.',
   defaultSettings: {
     apiHost: V2API_BASE_URL,
+    apiKey: '',
     models: [
       {
         modelId: 'claude-sonnet-4-5',
@@ -130,8 +144,27 @@ export const v2apiClaudeProvider = defineProvider({
       },
     ],
   },
-  createModel: (config) =>
-    new V2APIClaudeModel(
+  createModel: (config) => {
+    if (config.globalSettings.v2api?.mode !== 'byok') {
+      return new V2APIOpenAIModel(
+        {
+          apiKey: 'v2chat-account',
+          apiHost: getV2ChatServiceBaseUrl(),
+          model: config.model,
+          dalleStyle: config.settings.dalleStyle || 'vivid',
+          temperature: config.settings.temperature,
+          topP: config.settings.topP,
+          maxOutputTokens: config.settings.maxTokens,
+          injectDefaultMetadata: config.globalSettings.injectDefaultMetadata,
+          useProxy: false,
+          stream: config.settings.stream,
+          listModelsFallback: config.providerSetting.models || defaultModels,
+        },
+        config.dependencies,
+        config
+      )
+    }
+    return new V2APIClaudeModel(
       {
         claudeApiKey: config.effectiveApiKey,
         claudeApiHost: V2API_BASE_URL,
@@ -143,9 +176,10 @@ export const v2apiClaudeProvider = defineProvider({
       },
       config.dependencies,
       config
-    ),
+    )
+  },
   getDisplayName: (modelId, providerSettings) =>
-    `V2API Claude (${providerSettings?.models?.find((m) => m.modelId === modelId)?.nickname || modelId})`,
+    providerSettings?.models?.find((m) => m.modelId === modelId)?.nickname || modelId,
 })
 
 export const v2apiGeminiProvider = defineProvider({
@@ -155,6 +189,7 @@ export const v2apiGeminiProvider = defineProvider({
   description: 'V2API Gemini protocol. Base URL is fixed.',
   defaultSettings: {
     apiHost: V2API_BASE_URL,
+    apiKey: '',
     models: [
       {
         modelId: 'gemini-2.5-flash',
@@ -163,8 +198,27 @@ export const v2apiGeminiProvider = defineProvider({
       },
     ],
   },
-  createModel: (config) =>
-    new V2APIGeminiModel(
+  createModel: (config) => {
+    if (config.globalSettings.v2api?.mode !== 'byok') {
+      return new V2APIOpenAIModel(
+        {
+          apiKey: 'v2chat-account',
+          apiHost: getV2ChatServiceBaseUrl(),
+          model: config.model,
+          dalleStyle: config.settings.dalleStyle || 'vivid',
+          temperature: config.settings.temperature,
+          topP: config.settings.topP,
+          maxOutputTokens: config.settings.maxTokens,
+          injectDefaultMetadata: config.globalSettings.injectDefaultMetadata,
+          useProxy: false,
+          stream: config.settings.stream,
+          listModelsFallback: config.providerSetting.models || defaultModels,
+        },
+        config.dependencies,
+        config
+      )
+    }
+    return new V2APIGeminiModel(
       {
         geminiAPIKey: config.effectiveApiKey,
         geminiAPIHost: V2API_BASE_URL,
@@ -176,7 +230,8 @@ export const v2apiGeminiProvider = defineProvider({
       },
       config.dependencies,
       config
-    ),
+    )
+  },
   getDisplayName: (modelId, providerSettings) =>
-    `V2API Gemini (${providerSettings?.models?.find((m) => m.modelId === modelId)?.nickname || modelId})`,
+    providerSettings?.models?.find((m) => m.modelId === modelId)?.nickname || modelId,
 })

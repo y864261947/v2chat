@@ -29,9 +29,18 @@ import { useSessionList } from '@/stores/chatStore'
 import { reorderSessions } from '@/stores/sessionActions'
 import { useUIStore } from '@/stores/uiStore'
 import SessionItem from './SessionItem'
+import { buildRoleplayWindowLabels } from './sessionWindowLabels'
 
 export interface Props {
   sessionListViewportRef: MutableRefObject<HTMLDivElement | null>
+}
+
+function SessionListLoadingFooter() {
+  return (
+    <Flex justify="center" py="xs">
+      <IconLoader2 size={16} className="animate-spin" style={{ color: 'var(--mantine-color-dimmed)' }} />
+    </Flex>
+  )
 }
 
 export default function SessionList(props: Props) {
@@ -85,6 +94,7 @@ export default function SessionList(props: Props) {
     [activeDragId, sortedSessions]
   )
   const sortableSessionIds = useMemo(() => sortedSessions?.map((session) => session.id) ?? [], [sortedSessions])
+  const roleplayWindowLabels = useMemo(() => buildRoleplayWindowLabels(sortedSessions ?? []), [sortedSessions])
   const routerState = useRouterState()
   const onEndReached = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
@@ -95,11 +105,7 @@ export default function SessionList(props: Props) {
     () =>
       hasNextPage
         ? {
-            Footer: () => (
-              <Flex justify="center" py="xs">
-                <IconLoader2 size={16} className="animate-spin" style={{ color: 'var(--mantine-color-dimmed)' }} />
-              </Flex>
-            ),
+            Footer: SessionListLoadingFooter,
           }
         : {},
     [hasNextPage]
@@ -107,7 +113,7 @@ export default function SessionList(props: Props) {
 
   return (
     <>
-      <Flex align="center" py="xs" px="md" gap={'xs'}>
+      <Flex className="v2chat-sidebar-session-header" align="center" py="xs" px="md" gap={'xs'}>
         <Text c="chatbox-tertiary" flex={1}>
           {t('Chat')}
         </Text>
@@ -161,6 +167,7 @@ export default function SessionList(props: Props) {
                   <SessionItem
                     selected={routerState.location.pathname === `/session/${session.id}`}
                     session={session}
+                    windowLabel={roleplayWindowLabels.get(session.id)}
                   />
                 </SortableItem>
               )}
@@ -171,6 +178,7 @@ export default function SessionList(props: Props) {
                   <SessionItem
                     selected={routerState.location.pathname === `/session/${activeDragSession.id}`}
                     session={activeDragSession}
+                    windowLabel={roleplayWindowLabels.get(activeDragSession.id)}
                   />
                 </div>
               ) : null}

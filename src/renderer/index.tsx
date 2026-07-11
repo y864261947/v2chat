@@ -35,6 +35,7 @@ import { initLoginLicenseStateReconciliation } from './stores/premiumActions'
 import { initRecentDirectoriesStore } from './stores/recentDirectoriesStore'
 import { initSettingsStore } from './stores/settingsStore'
 import { initUpdateListeners } from './stores/updateStore'
+import { initializeV2ChatAccount } from './stores/v2chatAccountStore'
 
 // 开发环境下引入错误测试工具
 // if (process.env.NODE_ENV === 'development') {
@@ -137,10 +138,11 @@ initializeApp()
 
     i18n.changeLanguage(settings.language)
     initLoginLicenseStateReconciliation()
+    void initializeV2ChatAccount()
 
-    // Initialize auto-updater event listeners (desktop only, idempotent)
+    // Initialize platform update listeners and Android daily checks.
+    initUpdateListeners()
     if (platform.type === 'desktop') {
-      initUpdateListeners()
       initSessionAttachmentRagMaintenance()
     }
     // Cleanup is intentionally not captured — listeners persist for the app lifetime

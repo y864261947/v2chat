@@ -1,14 +1,28 @@
 apply plugin: 'com.android.application'
 
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+
+def releaseStoreFile = System.getenv('V2CHAT_KEYSTORE_FILE') ?: keystoreProperties.getProperty('storeFile')
+def releaseStorePassword = System.getenv('V2CHAT_KEYSTORE_PASSWORD') ?: keystoreProperties.getProperty('storePassword')
+def releaseKeyAlias = System.getenv('V2CHAT_KEY_ALIAS') ?: keystoreProperties.getProperty('keyAlias')
+def releaseKeyPassword = System.getenv('V2CHAT_KEY_PASSWORD') ?: keystoreProperties.getProperty('keyPassword')
+def releaseSigningConfigured = releaseStoreFile && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
+def appVersionCode = (System.getenv('V2CHAT_VERSION_CODE') ?: project.findProperty('v2chatVersionCode') ?: '1') as Integer
+def appVersionName = System.getenv('V2CHAT_VERSION_NAME') ?: project.findProperty('v2chatVersionName') ?: '0.0.1'
+
 android {
-    namespace "com.danjoy.companion.dev"
+    namespace "top.v2api.v2chat"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.danjoy.companion.dev"
+        applicationId "top.v2api.v2chat"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,10 +30,37 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    flavorDimensions "distribution"
+    productFlavors {
+        production {
+            dimension "distribution"
+            applicationId "top.v2api.v2chat"
+        }
+        legacy {
+            dimension "distribution"
+            applicationId "com.danjoy.companion.dev"
+            versionNameSuffix "-migration"
+        }
+    }
+    signingConfigs {
+        release {
+            if (releaseSigningConfigured) {
+                storeFile file(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (releaseSigningConfigured) {
+                signingConfig signingConfigs.release
+            } else {
+                logger.warn('V2Chat release signing is not configured; release output will be unsigned.')
+            }
         }
     }
 }
@@ -36,6 +77,7 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
+    implementation 'net.i2p.crypto:eddsa:0.3.0'
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

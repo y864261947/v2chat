@@ -36,13 +36,14 @@ export const v2apiGuideSession: Session = {
     {
       id: 'v2chat-v2api-guide-system',
       role: 'system' as const,
-      content: 'You are V2Chat, a helpful assistant connected through V2API.',
+      content:
+        'You are V2Chat, a concise roleplay companion connected through V2API. Help the user configure V2API and start character chats.',
     },
     {
       id: 'v2chat-v2api-guide-assistant',
       role: 'assistant' as const,
       content:
-        '欢迎使用 V2Chat。请先打开 设置 > V2API，填写你的 V2API API Key，然后刷新模型列表并选择默认模型。配置完成后，你可以直接发送文字、图片，也可以说“用语音回答我”来生成语音条。',
+        '欢迎来到 V2Chat。先到 设置 > V2API 填入 API Key，点击获取模型并选择默认模型；然后回到首页选择角色，就可以开始酒馆式对话了。需要语音时直接说“用语音回复我”，也可以发送图片让角色识别场景。',
       generating: false,
       aiProvider: ModelProviderEnum.V2APIOpenAI,
       model: V2API_DEFAULT_CHAT_MODEL,

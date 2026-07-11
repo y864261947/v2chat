@@ -1,6 +1,6 @@
-import { Collapse, Flex, Stack, Tabs, Text, TextInput } from '@mantine/core'
+import { Button, Collapse, Flex, Stack, Tabs, Text, TextInput } from '@mantine/core'
 import type { ProviderModelInfo } from '@shared/types'
-import { IconSearch } from '@tabler/icons-react'
+import { IconRefresh, IconSearch } from '@tabler/icons-react'
 import clsx from 'clsx'
 import { useAtom } from 'jotai'
 import { forwardRef, useMemo, useState } from 'react'
@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next'
 import SwipeableViews from 'react-swipeable-views'
 import { Drawer } from 'vaul'
 import { useProviders } from '@/hooks/useProviders'
+import { useV2APIModelRefresh } from '@/hooks/useV2APIModelRefresh'
 import { collapsedProvidersAtom } from '@/stores/atoms/uiAtoms'
 import { ScalableIcon } from '../common/ScalableIcon'
 import { ProviderHeader } from './ProviderHeader'
@@ -33,6 +34,7 @@ interface MobileModelSelectorProps {
   onSearchChange: (search: string) => void
   onOptionSubmit: (val: string) => void
   modelFilter?: (model: ProviderModelInfo, providerId?: string) => boolean
+  unified?: boolean
 }
 
 export const MobileModelSelector = forwardRef<HTMLDivElement, MobileModelSelectorProps>(
@@ -50,17 +52,28 @@ export const MobileModelSelector = forwardRef<HTMLDivElement, MobileModelSelecto
       onSearchChange,
       onOptionSubmit,
       modelFilter,
+      unified,
     },
     _ref
   ) => {
     const { t } = useTranslation()
-    const { favoritedModels: allFavoritedModels, favoriteModel, unfavoriteModel, isFavoritedModel } = useProviders()
+    const { providers, favoritedModels: allFavoritedModels, favoriteModel, unfavoriteModel, isFavoritedModel } =
+      useProviders()
+    const { fetching, refreshModels } = useV2APIModelRefresh()
     const [collapsedProviders, setCollapsedProviders] = useAtom(collapsedProvidersAtom)
 
     const favoritedModels = useMemo(() => {
       if (!allFavoritedModels || !modelFilter) return allFavoritedModels
       return allFavoritedModels.filter((fm) => fm.model && fm.provider && modelFilter(fm.model, fm.provider.id))
     }, [allFavoritedModels, modelFilter])
+    const selectedModelLabel = useMemo(() => {
+      if (!selectedProviderId || !selectedModelId) return ''
+      const provider = providers.find((item) => item.id === selectedProviderId)
+      const selectedModel = (provider?.models || provider?.defaultSettings?.models)?.find(
+        (item) => item.modelId === selectedModelId
+      )
+      return selectedModel?.nickname || selectedModelId
+    }, [providers, selectedModelId, selectedProviderId])
     const [open, setOpen] = useState(false)
 
     // Convert activeTab to index for SwipeableViews (0 = 'all', 1 = 'favorite')
@@ -98,15 +111,8 @@ export const MobileModelSelector = forwardRef<HTMLDivElement, MobileModelSelecto
 
       return (
         <Stack gap="md">
-          {Object.entries(groupFavoriteModels(favoritedModels)).map(([providerId, group]) => (
-            <Stack key={providerId} gap={4}>
-              <ProviderHeader
-                provider={group.provider || { id: providerId, name: providerId }}
-                modelCount={group.models.length}
-                showChevron={false}
-                variant="mobile"
-              />
-              {group.models.map((fm) => {
+          {unified
+            ? favoritedModels.map((fm) => {
                 if (!fm.provider || !fm.model) return null
                 return (
                   <ModelItemInDrawer
@@ -116,6 +122,7 @@ export const MobileModelSelector = forwardRef<HTMLDivElement, MobileModelSelecto
                     isFavorited={true}
                     isSelected={selectedProviderId === fm.provider.id && selectedModelId === fm.model.modelId}
                     hideFavoriteIcon={true}
+                    hideModelIcon={true}
                     onSelect={() => {
                       if (fm.provider && fm.model) {
                         handleOptionSubmit(`${fm.provider.id}/${fm.model.modelId}`)
@@ -128,9 +135,40 @@ export const MobileModelSelector = forwardRef<HTMLDivElement, MobileModelSelecto
                     }}
                   />
                 )
-              })}
-            </Stack>
-          ))}
+              })
+            : Object.entries(groupFavoriteModels(favoritedModels)).map(([providerId, group]) => (
+                <Stack key={providerId} gap={4}>
+                  <ProviderHeader
+                    provider={group.provider || { id: providerId, name: providerId }}
+                    modelCount={group.models.length}
+                    showChevron={false}
+                    variant="mobile"
+                  />
+                  {group.models.map((fm) => {
+                    if (!fm.provider || !fm.model) return null
+                    return (
+                      <ModelItemInDrawer
+                        key={`${fm.provider.id}/${fm.model.modelId}`}
+                        providerId={fm.provider.id}
+                        model={fm.model}
+                        isFavorited={true}
+                        isSelected={selectedProviderId === fm.provider.id && selectedModelId === fm.model.modelId}
+                        hideFavoriteIcon={true}
+                        onSelect={() => {
+                          if (fm.provider && fm.model) {
+                            handleOptionSubmit(`${fm.provider.id}/${fm.model.modelId}`)
+                          }
+                        }}
+                        onToggleFavorited={() => {
+                          if (fm.provider && fm.model) {
+                            unfavoriteModel(fm.provider.id, fm.model.modelId)
+                          }
+                        }}
+                      />
+                    )
+                  })}
+                </Stack>
+              ))}
         </Stack>
       )
     }
@@ -150,6 +188,17 @@ export const MobileModelSelector = forwardRef<HTMLDivElement, MobileModelSelecto
                   <Tabs.Tab value="favorite">{t('Favorite')}</Tabs.Tab>
                 </Tabs.List>
               </Tabs>
+
+              {selectedModelLabel && (
+                <Flex align="center" gap="xs" className="v2chat-mobile-model-current">
+                  <Text size="xs" c="dimmed" className="shrink-0">
+                    当前模型
+                  </Text>
+                  <Text size="sm" fw={700} lineClamp={1} className="min-w-0">
+                    {selectedModelLabel}
+                  </Text>
+                </Flex>
+              )}
 
               <Stack gap="md" className="flex-1 relative overflow-hidden">
                 <SwipeableViews
@@ -174,6 +223,17 @@ export const MobileModelSelector = forwardRef<HTMLDivElement, MobileModelSelecto
                       leftSection={<ScalableIcon icon={IconSearch} />}
                       className="mt-2"
                     />
+                    {unified && (
+                      <Button
+                        variant="light"
+                        size="xs"
+                        loading={fetching}
+                        leftSection={<ScalableIcon icon={IconRefresh} size={14} />}
+                        onClick={refreshModels}
+                      >
+                        获取模型
+                      </Button>
+                    )}
 
                     {showAuto && (
                       <Flex
@@ -206,6 +266,35 @@ export const MobileModelSelector = forwardRef<HTMLDivElement, MobileModelSelecto
                     {filteredProviders.map((provider) => {
                       const isCollapsed = collapsedProviders[provider.id] || false
                       if (!provider.models?.length) return null
+                      if (unified) {
+                        return (
+                          <Stack key={provider.id} gap={4}>
+                            {provider.models.map((model: ProviderModelInfo) => {
+                              const isFavorited = isFavoritedModel(provider.id, model.modelId)
+                              return (
+                                <ModelItemInDrawer
+                                  key={`${provider.id}/${model.modelId}`}
+                                  providerId={provider.id}
+                                  model={model}
+                                  isFavorited={isFavorited}
+                                  isSelected={selectedProviderId === provider.id && selectedModelId === model.modelId}
+                                  hideModelIcon={true}
+                                  onSelect={() => {
+                                    handleOptionSubmit(`${provider.id}/${model.modelId}`)
+                                  }}
+                                  onToggleFavorited={() => {
+                                    if (isFavorited) {
+                                      unfavoriteModel(provider.id, model.modelId)
+                                    } else {
+                                      favoriteModel(provider.id, model.modelId)
+                                    }
+                                  }}
+                                />
+                              )
+                            })}
+                          </Stack>
+                        )
+                      }
                       return (
                         <Stack key={provider.id} gap="xs">
                           <ProviderHeader

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import path from 'path'
 import { discoverSkills } from '../discovery'
 
 vi.mock('fs', () => ({
@@ -73,7 +74,7 @@ describe('discoverSkills', () => {
     const custom = result.find((s) => s.name === 'my-skill')
     expect(custom).toBeDefined()
     expect(custom!.isBuiltin).toBe(false)
-    expect(custom!.path).toBe('/skills/my-skill')
+    expect(path.normalize(custom!.path)).toBe(path.normalize('/skills/my-skill'))
   })
 
   it('should skip non-directory entries', () => {

@@ -8,7 +8,7 @@ import {
   Text,
   Title,
 } from '@mantine/core'
-import { IconRefresh } from '@tabler/icons-react'
+import { IconDownload, IconRefresh } from '@tabler/icons-react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { ScalableIcon } from '@/components/common/ScalableIcon'
@@ -17,7 +17,7 @@ import { useIsSmallScreen } from '@/hooks/useScreenChange'
 import useVersion from '@/hooks/useVersion'
 import platform from '@/platform'
 import iconPNG from '@/static/icon.png'
-import { installUpdate, useUpdateStore } from '@/stores/updateStore'
+import { downloadAndroidUpdate, installUpdate, useUpdateStore } from '@/stores/updateStore'
 
 export const Route = createFileRoute('/about')({
   component: RouteComponent,
@@ -64,21 +64,38 @@ function UpdateSection({ needCheckUpdate }: { needCheckUpdate: boolean }) {
     return <DesktopUpdateSection />
   }
 
-  return <MobileUpdateHint needCheckUpdate={needCheckUpdate} />
+  return <MobileUpdateSection needCheckUpdate={needCheckUpdate} />
 }
 
-function MobileUpdateHint({ needCheckUpdate }: { needCheckUpdate: boolean }) {
+function MobileUpdateSection({ needCheckUpdate }: { needCheckUpdate: boolean }) {
   const { t } = useTranslation()
+  const status = useUpdateStore((state) => state.status)
+  const progress = useUpdateStore((state) => state.progress)
+  const version = useUpdateStore((state) => state.version)
+  const error = useUpdateStore((state) => state.error)
 
-  if (needCheckUpdate) {
-    return <Text size="xs" c="chatbox-brand" className="flex-shrink-0">{t('New version available')}</Text>
+  if (status === 'checking') return <Button size="xs" variant="default" radius="xl" loading>{t('Checking...')}</Button>
+  if (status === 'available') {
+    return (
+      <Button size="xs" radius="xl" leftSection={<ScalableIcon icon={IconDownload} size={14} />} onClick={() => void downloadAndroidUpdate()}>
+        下载 V{version}
+      </Button>
+    )
+  }
+  if (status === 'downloading') {
+    return <Stack gap={4} w={150}><Text size="xs" ta="right">{t('Downloading...')} {progress}%</Text><Progress value={progress} size="xs" /></Stack>
+  }
+  if (status === 'downloaded') {
+    return <Button size="xs" radius="xl" leftSection={<ScalableIcon icon={IconRefresh} size={14} />} onClick={installUpdate}>安装 V{version}</Button>
+  }
+  if (status === 'error') {
+    return <Stack gap={2} align="flex-end"><Text size="xs" c="chatbox-error" lineClamp={1} title={error || ''}>{error || t('Update failed')}</Text><Button size="xs" variant="default" onClick={() => void platform.checkForUpdate?.()}>重试</Button></Stack>
+  }
+  if (status === 'up-to-date' || (!needCheckUpdate && status !== 'idle')) {
+    return <Text size="xs" c="chatbox-tertiary">{t('Already up to date')}</Text>
   }
 
-  return (
-    <Text size="xs" c="chatbox-tertiary" className="flex-shrink-0">
-      {t('Already up to date')}
-    </Text>
-  )
+  return <Button size="xs" variant="default" radius="xl" onClick={() => void platform.checkForUpdate?.()}>{t('Check Update')}</Button>
 }
 
 function DesktopUpdateSection() {

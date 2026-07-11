@@ -22,6 +22,7 @@ import {
   type ProviderModelInfo,
   type ProviderSettings as SharedProviderSettings,
 } from '@shared/types'
+import { isV2APIProvider } from '@shared/v2api'
 import {
   normalizeAzureEndpoint,
   normalizeClaudeHost,
@@ -43,7 +44,7 @@ import {
 } from '@tabler/icons-react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { uniq } from 'lodash'
-import { type ChangeEvent, useState } from 'react'
+import { type ChangeEvent, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createModelDependencies } from '@/adapters'
 import { trackJkClickEvent } from '@/analytics/jk'
@@ -58,6 +59,7 @@ import { useOAuthProviders } from '@/hooks/useOAuthProviders'
 import { enrichModelsFromRegistry, forceRefreshRegistry, useModelRegistryVersion } from '@/packages/model-registry'
 import { getModelSettingUtil } from '@/packages/model-setting-utils'
 import platform from '@/platform'
+import { RouteComponent as V2APISettingsPanel } from '@/routes/settings/v2api'
 import { settingsStore, useProviderSettings, useSettingsStore } from '@/stores/settingsStore'
 import { add as addToast } from '@/stores/toastActions'
 import { type ModelTestState, testModelCapabilities } from '@/utils/model-tester'
@@ -149,7 +151,23 @@ function normalizeAPIHost(
 
 export function RouteComponent() {
   const { providerId } = Route.useParams()
-  return <ProviderSettings key={providerId} providerId={providerId} />
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    if (!isV2APIProvider(providerId)) {
+      navigate({
+        to: '/settings/provider/$providerId',
+        params: { providerId: ModelProviderEnum.V2APIOpenAI },
+        replace: true,
+      })
+    }
+  }, [navigate, providerId])
+
+  if (!isV2APIProvider(providerId)) {
+    return null
+  }
+
+  return <V2APISettingsPanel />
 }
 
 function ProviderSettings({ providerId }: { providerId: string }) {

@@ -18,7 +18,7 @@ function safeJsonParse(value: string | null | undefined): unknown {
   }
 }
 
-function parseBackgroundImage(value: string | null | undefined): SessionMetaRecord['backgroundImage'] {
+function parseImageSource(value: string | null | undefined): SessionMetaRecord['backgroundImage'] {
   const parsed = safeJsonParse(value)
   if (!parsed || typeof parsed !== 'object') return undefined
   if ('type' in parsed && parsed.type === 'url' && 'url' in parsed && typeof parsed.url === 'string') {
@@ -33,6 +33,25 @@ function parseBackgroundImage(value: string | null | undefined): SessionMetaReco
     return { type: 'storage-key', storageKey: parsed.storageKey }
   }
   return undefined
+}
+
+function parseTags(value: string | null | undefined) {
+  const parsed = safeJsonParse(value)
+  return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : undefined
+}
+
+function parseBackgroundAppearance(value: string | null | undefined): SessionMetaRecord['backgroundAppearance'] {
+  const parsed = safeJsonParse(value)
+  if (!parsed || typeof parsed !== 'object') return undefined
+  const opacity = 'opacity' in parsed ? parsed.opacity : undefined
+  const dim = 'dim' in parsed ? parsed.dim : undefined
+  const blur = 'blur' in parsed ? parsed.blur : undefined
+  if (typeof opacity !== 'number' || typeof dim !== 'number' || typeof blur !== 'number') return undefined
+  return {
+    opacity: Math.min(1, Math.max(0.2, opacity)),
+    dim: Math.min(0.7, Math.max(0, dim)),
+    blur: Math.min(16, Math.max(0, blur)),
+  }
 }
 
 export class SQLiteSessionMetaStorage implements SessionMetaStorage {
@@ -70,17 +89,48 @@ export class SQLiteSessionMetaStorage implements SessionMetaStorage {
         hidden INTEGER NOT NULL DEFAULT 0,
         assistant_avatar_key TEXT,
         pic_url TEXT,
+        character_id TEXT,
+        character_description TEXT,
+        character_relationship TEXT,
+        character_memory TEXT,
+        character_memory_updated_at INTEGER,
+        current_scene TEXT,
+        character_tags TEXT,
+        character_voice_id TEXT,
         background_image TEXT,
+        background_appearance TEXT,
+        standing_image TEXT,
         type TEXT,
+        conversation_mode TEXT,
         sort_order REAL NOT NULL,
         created_at INTEGER NOT NULL
       )
     `)
 
+    await this.ensureColumn('character_id', 'TEXT')
+    await this.ensureColumn('character_description', 'TEXT')
+    await this.ensureColumn('character_relationship', 'TEXT')
+    await this.ensureColumn('character_memory', 'TEXT')
+    await this.ensureColumn('character_memory_updated_at', 'INTEGER')
+    await this.ensureColumn('current_scene', 'TEXT')
+    await this.ensureColumn('character_tags', 'TEXT')
+    await this.ensureColumn('character_voice_id', 'TEXT')
+    await this.ensureColumn('background_appearance', 'TEXT')
+    await this.ensureColumn('standing_image', 'TEXT')
+    await this.ensureColumn('conversation_mode', 'TEXT')
+
     await this.database.execute(`
       CREATE INDEX IF NOT EXISTS idx_session_meta_sort_order
       ON session_meta(sort_order DESC)
     `)
+  }
+
+  private async ensureColumn(name: string, type: string): Promise<void> {
+    try {
+      await this.database.execute(`ALTER TABLE session_meta ADD COLUMN ${name} ${type}`)
+    } catch {
+      // SQLite has no IF NOT EXISTS for ADD COLUMN. Ignore duplicate-column errors.
+    }
   }
 
   private recordToRow(record: SessionMetaRecord): Record<string, unknown> {
@@ -91,8 +141,19 @@ export class SQLiteSessionMetaStorage implements SessionMetaStorage {
       hidden: record.hidden ? 1 : 0,
       assistant_avatar_key: record.assistantAvatarKey || null,
       pic_url: record.picUrl || null,
+      character_id: record.characterId || null,
+      character_description: record.characterDescription || null,
+      character_relationship: record.characterRelationship || null,
+      character_memory: record.characterMemory || null,
+      character_memory_updated_at: record.characterMemoryUpdatedAt || null,
+      current_scene: record.currentScene || null,
+      character_tags: record.characterTags ? JSON.stringify(record.characterTags) : null,
+      character_voice_id: record.characterVoiceId || null,
       background_image: record.backgroundImage ? JSON.stringify(record.backgroundImage) : null,
+      background_appearance: record.backgroundAppearance ? JSON.stringify(record.backgroundAppearance) : null,
+      standing_image: record.standingImage ? JSON.stringify(record.standingImage) : null,
       type: record.type || null,
+      conversation_mode: record.conversationMode || (record.characterId ? 'roleplay' : 'assistant'),
       sort_order: record.sortOrder,
       created_at: record.createdAt,
     }
@@ -106,8 +167,21 @@ export class SQLiteSessionMetaStorage implements SessionMetaStorage {
       hidden: row.hidden === 1 ? true : undefined,
       assistantAvatarKey: (row.assistant_avatar_key as string) || undefined,
       picUrl: (row.pic_url as string) || undefined,
-      backgroundImage: parseBackgroundImage(row.background_image as string),
+      characterId: (row.character_id as string) || undefined,
+      characterDescription: (row.character_description as string) || undefined,
+      characterRelationship: (row.character_relationship as string) || undefined,
+      characterMemory: (row.character_memory as string) || undefined,
+      characterMemoryUpdatedAt: (row.character_memory_updated_at as number) || undefined,
+      currentScene: (row.current_scene as string) || undefined,
+      characterTags: parseTags(row.character_tags as string),
+      characterVoiceId: (row.character_voice_id as string) || undefined,
+      backgroundImage: parseImageSource(row.background_image as string),
+      backgroundAppearance: parseBackgroundAppearance(row.background_appearance as string),
+      standingImage: parseImageSource(row.standing_image as string),
       type: (row.type as SessionMetaRecord['type']) || undefined,
+      conversationMode:
+        (row.conversation_mode as SessionMetaRecord['conversationMode']) ||
+        ((row.character_id as string) ? 'roleplay' : 'assistant'),
       sortOrder: row.sort_order as number,
       createdAt: row.created_at as number,
     }
@@ -118,8 +192,10 @@ export class SQLiteSessionMetaStorage implements SessionMetaStorage {
     const row = this.recordToRow(record)
     await this.database.run(
       `INSERT INTO session_meta
-       (id, name, starred, hidden, assistant_avatar_key, pic_url, background_image, type, sort_order, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, name, starred, hidden, assistant_avatar_key, pic_url, character_id, character_description,
+        character_relationship, character_memory, character_memory_updated_at, current_scene, character_tags, character_voice_id,
+        background_image, background_appearance, standing_image, type, conversation_mode, sort_order, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         row.id,
         row.name,
@@ -127,8 +203,19 @@ export class SQLiteSessionMetaStorage implements SessionMetaStorage {
         row.hidden,
         row.assistant_avatar_key,
         row.pic_url,
+        row.character_id,
+        row.character_description,
+        row.character_relationship,
+        row.character_memory,
+        row.character_memory_updated_at,
+        row.current_scene,
+        row.character_tags,
+        row.character_voice_id,
         row.background_image,
+        row.background_appearance,
+        row.standing_image,
         row.type,
+        row.conversation_mode,
         row.sort_order,
         row.created_at,
       ]
@@ -140,8 +227,10 @@ export class SQLiteSessionMetaStorage implements SessionMetaStorage {
     if (records.length === 0) return
 
     const statement = `INSERT OR REPLACE INTO session_meta
-      (id, name, starred, hidden, assistant_avatar_key, pic_url, background_image, type, sort_order, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      (id, name, starred, hidden, assistant_avatar_key, pic_url, character_id, character_description,
+       character_relationship, character_memory, character_memory_updated_at, current_scene, character_tags, character_voice_id,
+        background_image, background_appearance, standing_image, type, conversation_mode, sort_order, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     const set: capSQLiteSet[] = records.map((record) => {
       const row = this.recordToRow(record)
       return {
@@ -153,8 +242,19 @@ export class SQLiteSessionMetaStorage implements SessionMetaStorage {
           row.hidden,
           row.assistant_avatar_key,
           row.pic_url,
+          row.character_id,
+          row.character_description,
+          row.character_relationship,
+          row.character_memory,
+          row.character_memory_updated_at,
+          row.current_scene,
+          row.character_tags,
+          row.character_voice_id,
           row.background_image,
+          row.background_appearance,
+          row.standing_image,
           row.type,
+          row.conversation_mode,
           row.sort_order,
           row.created_at,
         ],
@@ -175,7 +275,9 @@ export class SQLiteSessionMetaStorage implements SessionMetaStorage {
     await this.database.run(
       `UPDATE session_meta SET
        name = ?, starred = ?, hidden = ?, assistant_avatar_key = ?, pic_url = ?,
-       background_image = ?, type = ?, sort_order = ?, created_at = ?
+       character_id = ?, character_description = ?, character_relationship = ?, character_memory = ?,
+       character_memory_updated_at = ?, current_scene = ?, character_tags = ?, character_voice_id = ?,
+       background_image = ?, background_appearance = ?, standing_image = ?, type = ?, conversation_mode = ?, sort_order = ?, created_at = ?
        WHERE id = ?`,
       [
         row.name,
@@ -183,8 +285,19 @@ export class SQLiteSessionMetaStorage implements SessionMetaStorage {
         row.hidden,
         row.assistant_avatar_key,
         row.pic_url,
+        row.character_id,
+        row.character_description,
+        row.character_relationship,
+        row.character_memory,
+        row.character_memory_updated_at,
+        row.current_scene,
+        row.character_tags,
+        row.character_voice_id,
         row.background_image,
+        row.background_appearance,
+        row.standing_image,
         row.type,
+        row.conversation_mode,
         row.sort_order,
         row.created_at,
         id,

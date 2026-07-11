@@ -43,6 +43,8 @@ export const uiStore = createStore(
         } | null,
         widthFull: false, // Stored UI preference
         showCopilotsInNewSession: false,
+        tavernImmersiveMode: false,
+        tavernStageVisible: true,
         sidebarWidth: null as number | null, // Custom sidebar width, null means use default
         sidebarMode: 'chat' as 'chat' | 'task',
       },
@@ -195,6 +197,14 @@ export const uiStore = createStore(
           set({ showCopilotsInNewSession })
         },
 
+        setTavernImmersiveMode: (tavernImmersiveMode: boolean) => {
+          set({ tavernImmersiveMode })
+        },
+
+        setTavernStageVisible: (tavernStageVisible: boolean) => {
+          set({ tavernStageVisible })
+        },
+
         setSidebarWidth: (sidebarWidth: number | null) => {
           set({ sidebarWidth })
         },
@@ -210,6 +220,8 @@ export const uiStore = createStore(
       partialize: (state) => ({
         widthFull: state.widthFull,
         showCopilotsInNewSession: state.showCopilotsInNewSession,
+        tavernImmersiveMode: state.tavernImmersiveMode,
+        tavernStageVisible: state.tavernStageVisible,
         sidebarWidth: state.sidebarWidth,
         sessionWebBrowsingMap: state.sessionWebBrowsingMap,
       }),

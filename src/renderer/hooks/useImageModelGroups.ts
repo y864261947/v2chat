@@ -1,4 +1,5 @@
 import { ModelProviderEnum, ModelProviderType, type ProviderModelInfo } from '@shared/types'
+import { V2API_DEFAULT_IMAGE_MODEL } from '@shared/v2api'
 import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { getModelManifest, type RemoteModelInfo } from '@/packages/remote'
@@ -90,6 +91,7 @@ export function useImageModelGroups(): ImageModelGroup[] {
   const { providers } = useProviders()
   const { chatboxAIImageModels } = useChatboxAIModels()
   const providerSettingsMap = useSettingsStore((state) => state.providers)
+  const v2apiSettings = useSettingsStore((state) => state.v2api)
 
   const chatboxProvider = providers.find((p) => p.id === ModelProviderEnum.ChatboxAI)
   const openAIProvider = providers.find((p) => p.id === ModelProviderEnum.OpenAI)
@@ -104,6 +106,17 @@ export function useImageModelGroups(): ImageModelGroup[] {
 
   return useMemo(() => {
     const groups: ImageModelGroup[] = []
+    groups.push({
+      label: 'V2API Image',
+      providerId: ModelProviderEnum.V2APIOpenAI,
+      models: [
+        {
+          modelId: v2apiSettings?.imageModel || V2API_DEFAULT_IMAGE_MODEL,
+          displayName: v2apiSettings?.imageModel || V2API_DEFAULT_IMAGE_MODEL,
+        },
+      ],
+    })
+
     if (chatboxProvider) {
       const excluded = new Set(providerSettingsMap?.[ModelProviderEnum.ChatboxAI]?.excludedModels || [])
       const models = preferChatboxDefaultImageModel(
@@ -168,6 +181,7 @@ export function useImageModelGroups(): ImageModelGroup[] {
     geminiProvider,
     customGeminiProviders,
     providerSettingsMap,
+    v2apiSettings?.imageModel,
     chatboxAIImageModels,
     openAIImageModels,
     geminiImageModels,

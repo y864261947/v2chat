@@ -1,6 +1,17 @@
 import { v4 as uuidv4 } from 'uuid'
 import { type Config, ModelProviderEnum, type SessionSettings, type Settings, Theme } from './types'
-import { V2API_DEFAULT_CHAT_MODEL, V2API_DEFAULT_TTS_MODEL, V2API_DEFAULT_TTS_VOICE } from './v2api'
+import {
+  V2API_DEFAULT_CHAT_MODEL,
+  V2API_DEFAULT_ELEVENLABS_BASE_URL,
+  V2API_DEFAULT_ELEVENLABS_MODEL,
+  V2API_DEFAULT_ELEVENLABS_VOICE,
+  V2API_DEFAULT_IMAGE_BASE_URL,
+  V2API_DEFAULT_IMAGE_MODEL,
+  V2API_DEFAULT_TRANSCRIPTION_BASE_URL,
+  V2API_DEFAULT_TRANSCRIPTION_MODEL,
+  V2API_DEFAULT_TTS_PROVIDER,
+  V2API_TEST_API_KEY,
+} from './v2api'
 
 export function settings(): Settings {
   return {
@@ -70,6 +81,7 @@ export function settings(): Settings {
     providers: {
       [ModelProviderEnum.V2APIOpenAI]: {
         apiHost: 'https://v2api.top/v1',
+        apiKey: V2API_TEST_API_KEY,
         models: [
           {
             modelId: V2API_DEFAULT_CHAT_MODEL,
@@ -79,6 +91,7 @@ export function settings(): Settings {
       },
       [ModelProviderEnum.V2APIClaude]: {
         apiHost: 'https://v2api.top/v1',
+        apiKey: V2API_TEST_API_KEY,
         models: [
           {
             modelId: 'claude-sonnet-4-5',
@@ -88,6 +101,7 @@ export function settings(): Settings {
       },
       [ModelProviderEnum.V2APIGemini]: {
         apiHost: 'https://v2api.top/v1',
+        apiKey: V2API_TEST_API_KEY,
         models: [
           {
             modelId: 'gemini-2.5-flash',
@@ -97,9 +111,19 @@ export function settings(): Settings {
       },
     },
     v2api: {
+      mode: 'account',
       protocol: 'openai',
-      ttsModel: V2API_DEFAULT_TTS_MODEL,
-      ttsVoice: V2API_DEFAULT_TTS_VOICE,
+      ttsProvider: V2API_DEFAULT_TTS_PROVIDER,
+      ttsBaseUrl: V2API_DEFAULT_ELEVENLABS_BASE_URL,
+      ttsApiKey: '',
+      ttsModel: V2API_DEFAULT_ELEVENLABS_MODEL,
+      ttsVoice: V2API_DEFAULT_ELEVENLABS_VOICE,
+      transcriptionBaseUrl: V2API_DEFAULT_TRANSCRIPTION_BASE_URL,
+      transcriptionApiKey: '',
+      transcriptionModel: V2API_DEFAULT_TRANSCRIPTION_MODEL,
+      imageBaseUrl: V2API_DEFAULT_IMAGE_BASE_URL,
+      imageApiKey: '',
+      imageModel: V2API_DEFAULT_IMAGE_MODEL,
     },
     defaultChatModel: {
       provider: ModelProviderEnum.V2APIOpenAI,
@@ -125,6 +149,7 @@ export function settings(): Settings {
     language: 'en',
     fontSize: 14,
     spellCheck: true,
+    createNewChatOnStartup: false,
 
     defaultPrompt: getDefaultPrompt(),
 

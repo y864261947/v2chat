@@ -2,6 +2,7 @@ import type { Message, Session } from '@shared/types'
 import { StorageKeyGenerator } from '@/storage/StoreStorage'
 import { listSessionsMeta } from '@/stores/chatStore'
 import { settingsStore } from '@/stores/settingsStore'
+import { getTavernCharacters } from '@/packages/tavernCharacters'
 import platform from '../platform'
 import storage from '../storage'
 import * as atoms from '../stores/atoms'
@@ -65,6 +66,23 @@ export async function tickStorageTask() {
     // 会话背景图片不需要删除
     if (session.backgroundImage?.type === 'storage-key') {
       needDeletedSet.delete(session.backgroundImage.storageKey)
+    }
+    // 会话立绘不需要删除
+    if (session.standingImage?.type === 'storage-key') {
+      needDeletedSet.delete(session.standingImage.storageKey)
+    }
+  }
+
+  // 角色库图片不需要删除
+  for (const character of getTavernCharacters()) {
+    if (character.avatar?.type === 'storage-key') {
+      needDeletedSet.delete(character.avatar.storageKey)
+    }
+    if (character.backgroundImage?.type === 'storage-key') {
+      needDeletedSet.delete(character.backgroundImage.storageKey)
+    }
+    if (character.standingImage?.type === 'storage-key') {
+      needDeletedSet.delete(character.standingImage.storageKey)
     }
   }
 

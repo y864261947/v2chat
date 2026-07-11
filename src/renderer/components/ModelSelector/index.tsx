@@ -20,6 +20,7 @@ export type ModelSelectorProps = PropsWithChildren<
     selectedProviderId?: string
     selectedModelId?: string
     searchPosition?: 'top' | 'bottom'
+    unified?: boolean
   } & ComboboxProps
 >
 
@@ -35,6 +36,7 @@ export const ModelSelector = forwardRef<HTMLDivElement, ModelSelectorProps>(
       selectedProviderId,
       selectedModelId,
       searchPosition = 'bottom',
+      unified,
       ...comboboxProps
     },
     ref
@@ -96,6 +98,7 @@ export const ModelSelector = forwardRef<HTMLDivElement, ModelSelectorProps>(
         onSearchChange={setSearch}
         onOptionSubmit={handleOptionSubmit}
         modelFilter={modelFilter}
+        unified={unified}
       >
         {children}
       </MobileModelSelector>
@@ -116,6 +119,7 @@ export const ModelSelector = forwardRef<HTMLDivElement, ModelSelectorProps>(
         modelFilter={modelFilter}
         comboboxProps={comboboxProps}
         searchPosition={searchPosition}
+        unified={unified}
       >
         {children}
       </DesktopModelSelector>

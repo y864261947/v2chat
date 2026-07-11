@@ -65,7 +65,18 @@ export const settingsStore = createStore<Settings & Action>()(
         version: 4,
         partialize: (state) => {
           try {
-            return SettingsSchema.parse(state)
+            const persisted = SettingsSchema.parse(state)
+            if (persisted.providers) {
+              for (const providerId of ['v2api-openai', 'v2api-claude', 'v2api-gemini']) {
+                if (persisted.providers[providerId]) persisted.providers[providerId].apiKey = ''
+              }
+            }
+            if (persisted.v2api) {
+              persisted.v2api.ttsApiKey = ''
+              persisted.v2api.transcriptionApiKey = ''
+              persisted.v2api.imageApiKey = ''
+            }
+            return persisted
           } catch {
             return state
           }

@@ -14,6 +14,7 @@ function createState(file: File, fileKey: string): PreConstructedMessageState {
     draftMessageId: 'draft-1',
     text: '',
     pictureKeys: [],
+    audioParts: [],
     attachments: [file],
     links: [],
     preprocessedFiles: [

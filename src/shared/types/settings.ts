@@ -133,10 +133,20 @@ export const ProviderOptionsSchema = z.object({
 })
 
 export const V2APISettingsSchema = z.object({
+  mode: z.enum(['account', 'byok']).default('account'),
   protocol: z.enum(['openai', 'claude', 'gemini']).default('openai'),
   defaultVisionModel: z.string().optional().catch(undefined),
-  ttsModel: z.string().default('tts-1'),
-  ttsVoice: z.string().default('alloy'),
+  ttsProvider: z.enum(['openai-compatible', 'elevenlabs', 'groq']).default('elevenlabs'),
+  ttsBaseUrl: z.string().default('https://api.elevenlabs.io/v1'),
+  ttsApiKey: z.string().optional().catch(undefined),
+  ttsModel: z.string().default('eleven_multilingual_v2'),
+  ttsVoice: z.string().default('EXAVITQu4vr4xnSDxMaL'),
+  transcriptionBaseUrl: z.string().default('https://api.groq.com/openai/v1'),
+  transcriptionApiKey: z.string().optional().catch(undefined),
+  transcriptionModel: z.string().default('whisper-large-v3-turbo'),
+  imageBaseUrl: z.string().default('https://v2api.top/v1'),
+  imageApiKey: z.string().optional().catch(undefined),
+  imageModel: z.string().default('gpt-image-2'),
 })
 
 // NOTICE: Global settings is for new session default settings, set to session when session created, changes will not affect existing sessions
@@ -298,9 +308,16 @@ export enum Theme {
 export const SettingsSchema = GlobalSessionSettingsSchema.extend({
   providers: z.record(z.string(), ProviderSettingsSchema).optional().catch(undefined),
   v2api: V2APISettingsSchema.default({
+    mode: 'account',
     protocol: 'openai',
-    ttsModel: 'tts-1',
-    ttsVoice: 'alloy',
+    ttsProvider: 'elevenlabs',
+    ttsBaseUrl: 'https://api.elevenlabs.io/v1',
+    ttsModel: 'eleven_multilingual_v2',
+    ttsVoice: 'EXAVITQu4vr4xnSDxMaL',
+    transcriptionBaseUrl: 'https://api.groq.com/openai/v1',
+    transcriptionModel: 'whisper-large-v3-turbo',
+    imageBaseUrl: 'https://v2api.top/v1',
+    imageModel: 'gpt-image-2',
   }),
   customProviders: z.array(CustomProviderBaseInfoSchema).optional().catch(undefined),
   favoritedModels: z
@@ -387,7 +404,8 @@ export const SettingsSchema = GlobalSessionSettingsSchema.extend({
   fontSize: z.number().catch(14),
   spellCheck: z.boolean().optional(),
 
-  startupPage: z.enum(['home', 'session']).optional(),
+  startupPage: z.enum(['home', 'session']).optional(), // deprecated, retained for imported settings
+  createNewChatOnStartup: z.boolean().default(false),
 
   // disableQuickToggleShortcut?: boolean // 是否关闭快捷键切换窗口显隐（弃用，为了兼容历史数据，这个字段永远不要使用）
 

@@ -31,20 +31,20 @@ const Welcome = NiceModal.create(() => {
             <Image src={icon} w={86} h={86} />
             <Stack gap="3xs" align="center">
               <Title order={3}>V2Chat</Title>
-              <Text size="md">V2API powered AI chat</Text>
+              <Text size="md">为角色对话准备的 V2API 客户端</Text>
             </Stack>
           </Stack>
 
           <List size="sm" c="chatbox-secondary" className="flex flex-col items-center">
-            <List.Item>OpenAI / Claude / Gemini protocols via V2API</List.Item>
-            <List.Item>{t('All data is stored locally, ensuring privacy and rapid access')}</List.Item>
-            <List.Item>Supports text, image understanding, and voice replies</List.Item>
+            <List.Item>填写一个 V2API Key，获取可用模型</List.Item>
+            <List.Item>选择角色后直接进入酒馆式聊天</List.Item>
+            <List.Item>文字、图片和语音条会跟随对话场景</List.Item>
           </List>
         </Stack>
 
         <Paper shadow="none" radius="md" withBorder p="lg">
           <Stack gap="sm">
-            <Text className="text-center">Configure your V2API API Key to start using V2Chat.</Text>
+            <Text className="text-center">先完成 V2API 配置，再开始你的第一段角色对话。</Text>
             <Button
               size="lg"
               h={54}
@@ -56,13 +56,13 @@ const Welcome = NiceModal.create(() => {
                 modal.hide()
               }}
             >
-              Setup V2API
+              配置 V2API
             </Button>
           </Stack>
         </Paper>
 
         <Button variant="transparent" c="chatbox-secondary" size="compact-md" onClick={onClose}>
-          {t('Setup later')}
+          稍后再说
         </Button>
       </Stack>
     </AdaptiveModal>

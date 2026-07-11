@@ -12,6 +12,7 @@ const defaultPreConstructedMessageState = (): PreConstructedMessageState => ({
   draftMessageId: undefined,
   text: '',
   pictureKeys: [],
+  audioParts: [],
   attachments: [],
   links: [],
   preprocessedFiles: [],

@@ -1,4 +1,4 @@
-import { ActionIcon, Box, Button, Flex, Image, NavLink, SegmentedControl, Stack, Text, Tooltip } from '@mantine/core'
+import { ActionIcon, Box, Button, Flex, Image, Menu, NavLink, SegmentedControl, Stack, Text, Tooltip } from '@mantine/core'
 import SwipeableDrawer from '@mui/material/SwipeableDrawer'
 import {
   IconCirclePlus,
@@ -10,6 +10,8 @@ import {
   IconMessageChatbot,
   IconPhotoPlus,
   IconSettingsFilled,
+  IconUserPlus,
+  IconUsers,
 } from '@tabler/icons-react'
 import { useNavigate } from '@tanstack/react-router'
 import clsx from 'clsx'
@@ -27,11 +29,15 @@ import { useIsSmallScreen, useSidebarWidth } from './hooks/useScreenChange'
 import useVersion from './hooks/useVersion'
 import { navigateToSettings } from './modals/Settings'
 import { trackingEvent } from './packages/event'
+import { useTavernCharacters } from './packages/tavernCharacters'
+import { createRoleplaySession } from './packages/tavernSessions'
 import platform from './platform'
 import { featureFlags } from './utils/feature-flags'
 import icon from './static/icon.png'
 import { settingsStore, useLanguage } from './stores/settingsStore'
+import { createEmpty, switchCurrentSession } from './stores/sessionActions'
 import { taskSessionStore } from './stores/taskSessionStore'
+import * as toastActions from './stores/toastActions'
 import { useUIStore } from './stores/uiStore'
 import { installUpdate, useUpdateStore } from './stores/updateStore'
 import { CHATBOX_BUILD_PLATFORM, CHATBOX_BUILD_TARGET } from './variables'
@@ -55,6 +61,8 @@ export default function Sidebar() {
 
   const [isResizing, setIsResizing] = useState(false)
   const [showDevPane, setShowDevPane] = useState(false)
+  const [creatingSession, setCreatingSession] = useState(false)
+  const characters = useTavernCharacters()
   const resizeStartX = useRef<number>(0)
   const resizeStartWidth = useRef<number>(0)
   const showDebugDevPane =
@@ -62,14 +70,47 @@ export default function Sidebar() {
 
   const { needRoomForMacWindowControls } = useNeedRoomForMacWinControls()
 
-  const handleCreateNewSession = useCallback(() => {
-    navigate({ to: `/` })
-
-    if (isSmallScreen) {
-      setShowSidebar(false)
+  const handleCreateNewSession = useCallback(async () => {
+    if (creatingSession) return
+    try {
+      setCreatingSession(true)
+      await createEmpty('chat')
+      if (isSmallScreen) setShowSidebar(false)
+      trackingEvent('create_new_conversation', { event_category: 'user' })
+    } catch (error) {
+      toastActions.add(error instanceof Error ? error.message : '无法创建新对话')
+    } finally {
+      setCreatingSession(false)
     }
-    trackingEvent('create_new_conversation', { event_category: 'user' })
-  }, [navigate, setShowSidebar, isSmallScreen])
+  }, [creatingSession, setShowSidebar, isSmallScreen])
+
+  const handleCreateRoleplaySession = useCallback(
+    async (characterId: string) => {
+      if (creatingSession) return
+      const character = characters.find((item) => item.id === characterId)
+      if (!character) return
+      try {
+        setCreatingSession(true)
+        await createRoleplaySession(character)
+        if (isSmallScreen) setShowSidebar(false)
+      } catch (error) {
+        toastActions.add(error instanceof Error ? error.message : '无法创建角色对话')
+      } finally {
+        setCreatingSession(false)
+      }
+    },
+    [characters, creatingSession, isSmallScreen, setShowSidebar]
+  )
+
+  const openCharacterCreator = useCallback(() => {
+    navigate({ to: '/', search: { action: 'new-character' } })
+    if (isSmallScreen) setShowSidebar(false)
+  }, [isSmallScreen, navigate, setShowSidebar])
+
+  const openCharacterLibrary = useCallback(() => {
+    navigate({ to: '/', search: { action: 'characters' } })
+    if (isSmallScreen) setShowSidebar(false)
+  }, [isSmallScreen, navigate, setShowSidebar])
 
   const handleCreateNewPictureSession = useCallback(() => {
     navigate({ to: '/image-creator' })
@@ -145,7 +186,9 @@ export default function Sidebar() {
       }}
       SlideProps={language === 'ar' ? { direction: 'left' } : undefined}
       PaperProps={
-        language === 'ar' ? { sx: { direction: 'rtl', overflowY: 'initial' } } : { sx: { overflowY: 'initial' } }
+        language === 'ar'
+          ? { className: 'v2chat-sidebar-paper', sx: { direction: 'rtl', overflowY: 'initial' } }
+          : { className: 'v2chat-sidebar-paper', sx: { overflowY: 'initial' } }
       }
       disableSwipeToOpen={CHATBOX_BUILD_PLATFORM !== 'ios'} // 只在iOS设备上启用SwipeToOpen
     >
@@ -154,10 +197,10 @@ export default function Sidebar() {
         gap={0}
         pt="var(--mobile-safe-area-inset-top, 0px)"
         pb="var(--mobile-safe-area-inset-bottom, 0px)"
-        className="relative"
+        className="v2chat-sidebar relative"
       >
         {needRoomForMacWindowControls && <Box className="title-bar flex-[0_0_44px]" />}
-        <Flex align="center" justify="space-between" px="md" py="sm">
+        <Flex className="v2chat-sidebar__brand" align="center" justify="space-between" px="md" py="sm">
           <Flex align="center" gap="sm">
             <Flex align="center" gap="sm" onClick={() => navigate({ to: '/about' })} style={{ cursor: 'pointer' }}>
               <Image src={icon} w={20} h={20} />
@@ -185,15 +228,15 @@ export default function Sidebar() {
             value={sidebarMode}
             onChange={(val) => {
               setSidebarMode(val as 'chat' | 'task')
-              const { startupPage } = settingsStore.getState()
               if (val === 'chat') {
                 const sid = JSON.parse(localStorage.getItem('_currentSessionIdCachedAtom') || '""') as string
-                if (sid && startupPage === 'session') {
-                  navigate({ to: '/session/$sessionId', params: { sessionId: sid } })
+                if (sid) {
+                  switchCurrentSession(sid)
                 } else {
                   navigate({ to: '/' })
                 }
               } else if (val === 'task') {
+                const { startupPage } = settingsStore.getState()
                 const taskId = taskSessionStore.getState().currentTaskId
                 if (taskId && startupPage === 'session') {
                   navigate({ to: '/task/$taskId', params: { taskId } })
@@ -221,7 +264,7 @@ export default function Sidebar() {
 
         <SidebarUpdateBanner />
 
-        <Stack gap={0} px="xs" pb="xs">
+        <Stack className="v2chat-sidebar__footer" gap={0} px="xs" pb="xs">
           <Divider />
           <Stack gap="xs" pt="xs" mb="xs">
             {sidebarMode === 'task' && featureFlags.taskMode ? (
@@ -231,19 +274,57 @@ export default function Sidebar() {
               </Button>
             ) : (
               <>
-                <Button variant="light" fullWidth data-testid="new-chat-button" onClick={handleCreateNewSession}>
-                  <ScalableIcon icon={IconCirclePlus} className="mr-2" />
-                  {t('New Chat')}
-                </Button>
                 <Button
                   variant="light"
                   fullWidth
-                  data-testid="new-image-button"
-                  onClick={handleCreateNewPictureSession}
+                  data-testid="new-chat-button"
+                  loading={creatingSession}
+                  onClick={() => void handleCreateNewSession()}
                 >
-                  <ScalableIcon icon={IconPhotoPlus} className="mr-2" />
-                  {t('Create Image')}
+                  <ScalableIcon icon={IconCirclePlus} className="mr-2" />
+                  {t('New Chat')}
                 </Button>
+                <Flex gap="xs">
+                  <Menu position="top-start" shadow="md" width={280} withinPortal>
+                    <Menu.Target>
+                      <Button variant="light" fullWidth leftSection={<ScalableIcon icon={IconUsers} size={18} />}>
+                        角色
+                      </Button>
+                    </Menu.Target>
+                    <Menu.Dropdown className="v2chat-sidebar-character-menu">
+                      <Menu.Label>用角色新建独立窗口</Menu.Label>
+                      {characters.length ? (
+                        characters.map((character) => (
+                          <Menu.Item
+                            key={character.id}
+                            leftSection={<span className="v2chat-sidebar-character-menu__avatar">{character.name.slice(0, 1)}</span>}
+                            onClick={() => void handleCreateRoleplaySession(character.id)}
+                          >
+                            {character.name}
+                          </Menu.Item>
+                        ))
+                      ) : (
+                        <Menu.Item disabled>还没有角色</Menu.Item>
+                      )}
+                      <Menu.Divider />
+                      <Menu.Item leftSection={<ScalableIcon icon={IconUserPlus} size={17} />} onClick={openCharacterCreator}>
+                        新建角色
+                      </Menu.Item>
+                      <Menu.Item leftSection={<ScalableIcon icon={IconUsers} size={17} />} onClick={openCharacterLibrary}>
+                        管理角色
+                      </Menu.Item>
+                    </Menu.Dropdown>
+                  </Menu>
+                  <Button
+                    variant="light"
+                    fullWidth
+                    data-testid="new-image-button"
+                    onClick={handleCreateNewPictureSession}
+                    leftSection={<ScalableIcon icon={IconPhotoPlus} size={18} />}
+                  >
+                    生图
+                  </Button>
+                </Flex>
               </>
             )}
           </Stack>

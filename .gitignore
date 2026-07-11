@@ -170,6 +170,14 @@ dist
 
 electron-builder.env
 
+# Android release artifacts and signing material
+/*.apk
+/*.aab
+*.jks
+*.keystore
+*.p12
+android/keystore.properties
+
 # Share VS Code settings
 # .vscode
 

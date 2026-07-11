@@ -95,8 +95,17 @@ const DesktopActionMenu: FC<ActionMenuProps> = ({
   )
 }
 
-const MobileActionMenu: FC<ActionMenuProps> = ({ children, items, title }) => {
-  const [open, setOpen] = useState(false)
+const MobileActionMenu: FC<ActionMenuProps> = ({ children, items, title, opened, onChange }) => {
+  const [internalOpen, setInternalOpen] = useState(false)
+  const isControlled = typeof opened === 'boolean'
+  const open = isControlled ? opened : internalOpen
+
+  const setOpen = (nextOpen: boolean) => {
+    if (!isControlled) {
+      setInternalOpen(nextOpen)
+    }
+    onChange?.(nextOpen)
+  }
 
   const handleItemClick = (onClick?: MouseEventHandler<HTMLButtonElement>) => {
     return async (e: React.MouseEvent<HTMLButtonElement>) => {

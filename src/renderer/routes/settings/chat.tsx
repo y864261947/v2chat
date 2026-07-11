@@ -28,7 +28,12 @@ export function RouteComponent() {
 
   return (
     <Stack gap="xxl" p="md">
-      <Title order={5}>{t('Chat Settings')}</Title>
+      <Stack gap={4}>
+        <Title order={5}>全局对话默认值</Title>
+        <Text size="xs" c="chatbox-tertiary">
+          这里只影响之后新建的对话窗口，已有窗口请从侧边栏打开“当前窗口设置”。
+        </Text>
+      </Stack>
 
       {/* Avatars */}
       <Stack gap="md">

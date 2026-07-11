@@ -36,7 +36,7 @@ Example:
 ```
 docker run -p 80:80 -p 443:443 \
 -v ./caddy_config:/config -v ./caddy_data:/data \
--e KEY=sk-xxxxxxxxxxxxxxxxxxx \
+-e KEY=YOUR_SHARED_KEY \
 bensdocker/chatbox-team
 ```
 
@@ -63,7 +63,7 @@ Example:
 docker run -p 80:80 -p 443:443 \
 -v ./caddy_config:/config -v ./caddy_data:/data \
 -e HOST=proxy.chatbox.run \
--e KEY=sk-xxxxxxxxxxxxxxxxxx \
+-e KEY=YOUR_SHARED_KEY \
 bensdocker/chatbox-team
 ```
 
